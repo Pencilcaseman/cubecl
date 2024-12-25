@@ -1,6 +1,7 @@
 use crate::matmul::components::config::InputIdent;
 use crate::matmul::components::global;
 use crate::matmul::components::{Ident, MatrixLayout};
+use crate::tensor::{ReadWrite, VirtualTensor};
 use cubecl_core as cubecl;
 use cubecl_core::prelude::*;
 
@@ -9,7 +10,7 @@ use cubecl_core::prelude::*;
 /// Ensures safe access by preventing out-of-bounds errors.
 /// Includes pre-fetched shapes and strides for optimized performance.
 pub struct TensorReader<E: Numeric> {
-    pub tensor: *const Tensor<Line<E>>,
+    pub tensor: VirtualTensor<E>,
     pub x_offset: u32,
     pub y_offset: u32,
     pub stride_x: u32,
@@ -24,7 +25,7 @@ pub struct TensorReader<E: Numeric> {
 /// Ensures safe access by preventing out-of-bounds errors.
 /// Includes pre-fetched shapes and strides for optimized performance.
 pub struct TensorWriter<E: Numeric> {
-    pub tensor: *mut Tensor<Line<E>>,
+    pub tensor: VirtualTensor<E, ReadWrite>,
     pub x_offset: u32,
     pub y_offset: u32,
     pub stride_x: u32,
@@ -42,7 +43,7 @@ unsafe impl<E: Numeric> Send for TensorWriter<E> {}
 #[cube]
 impl<EG: Numeric> TensorReader<EG> {
     /// Instantiate a read view over the given tensor, pre-fetching needed strides and shapes
-    pub fn new(tensor: &Tensor<Line<EG>>, x_offset: u32, y_offset: u32, batch_offset: u32) -> Self {
+    pub fn new(tensor: VirtualTensor<EG>, x_offset: u32, y_offset: u32, batch_offset: u32) -> Self {
         let rank = tensor.rank();
         let stride_x = tensor.stride(rank - 2);
         let stride_y = tensor.stride(rank - 1);
@@ -134,7 +135,7 @@ impl<EG: Numeric> TensorReader<EG> {
     }
 
     fn read(&self, position: u32) -> Line<EG> {
-        unsafe { *(*self.tensor).index_unchecked(position) }
+        self.tensor.read(position)
     }
 }
 
@@ -142,7 +143,7 @@ impl<EG: Numeric> TensorReader<EG> {
 impl<EG: Numeric> TensorWriter<EG> {
     /// Instantiate a write view over the given tensor, pre-fetching needed strides and shapes
     pub fn new(
-        tensor: &mut Tensor<Line<EG>>,
+        tensor: VirtualTensor<EG, ReadWrite>,
         x_offset: u32,
         y_offset: u32,
         batch_offset: u32,
@@ -211,6 +212,6 @@ impl<EG: Numeric> TensorWriter<EG> {
     }
 
     fn write(&mut self, position: u32, value: Line<EG>) {
-        unsafe { (*self.tensor).index_assign_unchecked(position, value) }
+        self.tensor.write(position, value)
     }
 }

@@ -6,6 +6,7 @@ use crate::matmul::components::global::Loader;
 use crate::matmul::components::stage::multi_buffer::{LhsReader, RhsReader};
 use crate::matmul::components::stage::{self, Stage};
 use crate::matmul::components::{global, Ident};
+use crate::tensor::VirtualTensor;
 use cubecl_core as cubecl;
 use cubecl_core::prelude::*;
 
@@ -52,7 +53,7 @@ impl<EG: Numeric, ES: Numeric, S: stage::Config, L: LoadingStrategy>
 #[cube]
 impl<EG: Numeric, ES: Numeric, S: stage::Config, L: LoadingStrategy> LhsLoader<EG, ES, S, L> {
     pub fn new<G: global::Config>(
-        tensor: &Tensor<Line<EG>>,
+        tensor: VirtualTensor<EG>,
         x_offset: u32,
         y_offset: u32,
         batch_offset: u32,
@@ -97,7 +98,7 @@ impl<EG: Numeric, ES: Numeric, S: stage::Config, L: LoadingStrategy>
 #[cube]
 impl<EG: Numeric, ES: Numeric, S: stage::Config, L: LoadingStrategy> RhsLoader<EG, ES, S, L> {
     pub fn new<G: global::Config>(
-        tensor: &Tensor<Line<EG>>,
+        tensor: VirtualTensor<EG>,
         x_offset: u32,
         y_offset: u32,
         batch_offset: u32,

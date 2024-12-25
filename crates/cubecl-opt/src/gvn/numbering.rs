@@ -103,6 +103,9 @@ impl ValueTable {
         }
     }
 
+    /// Create expression if it's numberable. Returns the number, optional out value and
+    /// expression. If the error includes a value, treats that value as volatile (i.e. atomics) and
+    /// don't number any expressions that depend on it.
     fn create_expr(
         &mut self,
         inst: &ir::Instruction,
@@ -117,9 +120,11 @@ impl ValueTable {
             Operation::Operator(operator) => self.create_expr_op(operator, inst.out()),
             Operation::Metadata(metadata) => self.create_expr_meta(metadata, inst.out()),
             Operation::Plane(_) | Operation::Atomic(_) => Err(value_of_var(&inst.out())),
-            Operation::Branch(_) | Operation::Synchronization(_) | Operation::CoopMma(_) => {
-                Err(None)
-            }
+            Operation::Branch(_)
+            | Operation::Synchronization(_)
+            | Operation::CoopMma(_)
+            | Operation::Comment(_) => Err(None),
+            Operation::Debug(_) => Err(None),
         }
     }
 

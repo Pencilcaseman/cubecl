@@ -96,8 +96,17 @@ pub(crate) struct Slice {
     pub(crate) const_len: Option<u32>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ConstArray {
+    pub id: u16,
+    pub length: u32,
+    pub item: Item,
+    pub values: Vec<core::Variable>,
+}
+
 #[derive(Default, Debug, Clone)]
 struct Program {
+    pub const_arrays: Vec<ConstArray>,
     pub variables: HashMap<(u16, u8), Item>,
     pub(crate) slices: HashMap<(u16, u8), Slice>,
     pub graph: StableDiGraph<BasicBlock, ()>,
@@ -320,7 +329,7 @@ impl Optimizer {
     }
 
     /// A set of node indices for all blocks in the program
-    fn node_ids(&self) -> Vec<NodeIndex> {
+    pub fn node_ids(&self) -> Vec<NodeIndex> {
         self.program.node_indices().collect()
     }
 
@@ -376,6 +385,18 @@ impl Optimizer {
             if let VariableKind::Local { id, depth } = var.kind {
                 self.program.variables.insert((id, depth), var.item);
             }
+        }
+
+        for (var, values) in scope.const_arrays {
+            let VariableKind::ConstantArray { id, length } = var.kind else {
+                unreachable!()
+            };
+            self.program.const_arrays.push(ConstArray {
+                id,
+                length,
+                item: var.item,
+                values,
+            });
         }
 
         let is_break = processed.operations.contains(&Branch::Break.into());
@@ -445,6 +466,10 @@ impl Optimizer {
         } else {
             self.ret
         }
+    }
+
+    pub fn const_arrays(&self) -> Vec<ConstArray> {
+        self.program.const_arrays.clone()
     }
 }
 

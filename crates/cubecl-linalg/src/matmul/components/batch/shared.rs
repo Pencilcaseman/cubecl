@@ -1,15 +1,17 @@
 use cubecl_core as cubecl;
 use cubecl_core::prelude::*;
 
-use crate::matmul::components::global;
+use crate::matmul::components::global::args::{TensorInput, TensorOutput};
+use crate::matmul::components::{global, MatmulSpec};
+use crate::tensor::{ReadWrite, VirtualTensor};
 
 #[cube]
 /// Execute global matmul on lhs, rhs, writing in out.
 /// x and y offsets are absolute rows and columns
-pub(crate) fn gmm_execute<EG: Numeric, ES: Numeric, GMM: global::Matmul<EG, ES>>(
-    lhs: &Tensor<Line<EG>>,
-    rhs: &Tensor<Line<EG>>,
-    out: &mut Tensor<Line<EG>>,
+pub(crate) fn gmm_execute<MS: MatmulSpec, GMM: global::Matmul<MS>>(
+    lhs: TensorInput<MS::EG, MS::Args>,
+    rhs: TensorInput<MS::EG, MS::Args>,
+    mut out: TensorOutput<MS::EG, MS::Args>,
     x_offset: u32,
     y_offset: u32,
     nth_batch: u32,
@@ -19,13 +21,17 @@ pub(crate) fn gmm_execute<EG: Numeric, ES: Numeric, GMM: global::Matmul<EG, ES>>
 ) {
     let rank = out.rank();
     let batch_out = nth_batch * out.shape(rank - 2) * out.shape(rank - 1);
-    let mut batch_lhs = 0;
-    let mut batch_rhs = 0;
+    let mut batch_lhs = 0u32.runtime();
+    let mut batch_rhs = 0u32.runtime();
     for b in 0..rank - 2 {
         let tmp = batch_out / out.stride(b);
         batch_lhs += tmp % lhs.shape(b) * lhs.stride(b);
         batch_rhs += tmp % rhs.shape(b) * rhs.stride(b);
     }
+
+    let lhs = VirtualTensor::<MS::EG>::new::<TensorInput<MS::EG, MS::Args>>(&lhs);
+    let rhs = VirtualTensor::<MS::EG>::new::<TensorInput<MS::EG, MS::Args>>(&rhs);
+    let out = VirtualTensor::<MS::EG, ReadWrite>::new::<TensorOutput<MS::EG, MS::Args>>(&mut out);
 
     GMM::execute(
         GMM::init_lhs_loader(lhs, x_offset, k_range.0, batch_lhs, config),

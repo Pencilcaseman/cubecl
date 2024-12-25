@@ -1,7 +1,7 @@
 use std::hash::Hash;
 use std::{collections::HashSet, fmt::Debug, num::NonZero};
 
-use cubecl_core::ir::CheckedIndexAssign;
+use cubecl_core::ir::{expand_checked_index, expand_checked_index_assign};
 use cubecl_core::{
     ir::{self as gpu},
     prelude::CubePrimitive,
@@ -24,7 +24,6 @@ pub trait Dialect:
     // includes
     fn include_f16(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
     fn include_bf16(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
-    fn include_wmma(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
     fn include_runtime(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
     // types
     fn bfloat16_type_name(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
@@ -59,6 +58,7 @@ pub struct CppCompiler<D: Dialect> {
     wmma: bool,
     bf16: bool,
     f16: bool,
+    printf: bool,
     num_inputs: usize,
     num_outputs: usize,
     ext_meta_positions: Vec<u32>,
@@ -230,6 +230,9 @@ impl<D: Dialect> CppCompiler<D> {
                 gpu::Synchronization::SyncUnits => instructions.push(Instruction::SyncThreads),
                 gpu::Synchronization::SyncStorage => instructions.push(Instruction::SyncThreads),
             },
+            gpu::Operation::Comment(val) => instructions.push(Instruction::Comment {
+                content: val.content,
+            }),
             gpu::Operation::Plane(op) => {
                 self.warp_size_checked = true;
                 let out = self.compile_variable(out.unwrap());
@@ -283,6 +286,26 @@ impl<D: Dialect> CppCompiler<D> {
                 }
             }
             gpu::Operation::CoopMma(cmma) => instructions.push(self.compile_cmma(cmma, out)),
+            gpu::Operation::Debug(debug) => match debug {
+                // No good way to attach debug info
+                gpu::DebugInfo::BeginCall { .. }
+                | gpu::DebugInfo::EndCall
+                | gpu::DebugInfo::Source { .. }
+                | gpu::DebugInfo::Line { .. } => {}
+                gpu::DebugInfo::Print {
+                    format_string,
+                    args,
+                } => {
+                    self.printf = true;
+                    instructions.push(Instruction::Printf {
+                        format_string,
+                        args: args
+                            .into_iter()
+                            .map(|arg| self.compile_variable(arg))
+                            .collect(),
+                    })
+                }
+            },
         }
     }
 
@@ -520,35 +543,43 @@ impl<D: Dialect> CppCompiler<D> {
             gpu::Operator::Sub(op) => {
                 instructions.push(Instruction::Sub(self.compile_binary(op, out)))
             }
-            gpu::Operator::Slice(op) => instructions.push(Instruction::Slice {
-                input: self.compile_variable(op.input),
-                start: self.compile_variable(op.start),
-                end: self.compile_variable(op.end),
-                out: self.compile_variable(out),
-            }),
-            gpu::Operator::Index(op) => {
-                if matches!(self.strategy, ExecutionMode::Checked) && op.lhs.has_length() {
-                    let lhs = op.lhs;
-                    let rhs = op.rhs;
-                    let array_len = scope.create_local(gpu::Item::new(u32::as_elem()));
-
+            gpu::Operator::Slice(op) => {
+                if matches!(self.strategy, ExecutionMode::Checked) && op.input.has_length() {
+                    let input = op.input;
+                    let input_len = scope.create_local(gpu::Item::new(u32::as_elem()));
                     instructions.extend(self.compile_scope(scope));
 
-                    let length = match lhs.has_buffer_length() {
-                        true => gpu::Metadata::BufferLength { var: lhs },
-                        false => gpu::Metadata::Length { var: lhs },
+                    let length = match input.has_buffer_length() {
+                        true => gpu::Metadata::BufferLength { var: input },
+                        false => gpu::Metadata::Length { var: input },
                     };
 
-                    instructions.push(self.compile_metadata(length, Some(array_len)));
-                    instructions.push(Instruction::CheckedIndex {
-                        len: self.compile_variable(array_len),
-                        lhs: self.compile_variable(lhs),
-                        rhs: self.compile_variable(rhs),
+                    instructions.push(self.compile_metadata(length, Some(input_len)));
+                    instructions.push(Instruction::CheckedSlice {
+                        input: self.compile_variable(op.input),
+                        start: self.compile_variable(op.start),
+                        end: self.compile_variable(op.end),
                         out: self.compile_variable(out),
+                        len: self.compile_variable(input_len),
                     });
                 } else {
-                    instructions.push(Instruction::Index(self.compile_binary(op, out)));
+                    instructions.push(Instruction::Slice {
+                        input: self.compile_variable(op.input),
+                        start: self.compile_variable(op.start),
+                        end: self.compile_variable(op.end),
+                        out: self.compile_variable(out),
+                    })
                 }
+            }
+            gpu::Operator::Index(op) => {
+                if let ExecutionMode::Checked = self.strategy {
+                    if op.lhs.has_length() {
+                        expand_checked_index(scope, op.lhs, op.rhs, out);
+                        instructions.extend(self.compile_scope(scope));
+                        return;
+                    }
+                };
+                instructions.push(Instruction::Index(self.compile_binary(op, out)));
             }
             gpu::Operator::UncheckedIndex(op) => {
                 instructions.push(Instruction::Index(self.compile_binary(op, out)))
@@ -556,17 +587,11 @@ impl<D: Dialect> CppCompiler<D> {
             gpu::Operator::IndexAssign(op) => {
                 if let ExecutionMode::Checked = self.strategy {
                     if out.has_length() {
-                        CheckedIndexAssign {
-                            lhs: op.lhs,
-                            rhs: op.rhs,
-                            out,
-                        }
-                        .expand(scope);
+                        expand_checked_index_assign(scope, op.lhs, op.rhs, out);
                         instructions.extend(self.compile_scope(scope));
                         return;
                     }
                 };
-
                 instructions.push(Instruction::IndexAssign(self.compile_binary(op, out)));
             }
             gpu::Operator::UncheckedIndexAssign(op) => {
@@ -915,6 +940,7 @@ impl<D: Dialect> CppCompiler<D> {
         Binding {
             item: self.compile_item(binding.item),
             size: binding.size,
+            vis: binding.visibility,
         }
     }
 

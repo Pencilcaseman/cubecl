@@ -10,6 +10,7 @@ use crate::matmul::components::stage::single_buffer::{LhsBufferReader, RhsBuffer
 use crate::matmul::components::stage::TilingOrderConfig;
 use crate::matmul::components::stage::{self, Stage};
 use crate::matmul::components::{global, Ident};
+use crate::tensor::VirtualTensor;
 use cubecl_core as cubecl;
 use cubecl_core::prelude::*;
 
@@ -67,7 +68,7 @@ impl<EG: Numeric, ES: Numeric, S: stage::Config> Loader<EG, ES, specialized::Con
 #[cube]
 impl<EG: Numeric, ES: Numeric, S: stage::Config> LhsBufferLoader<EG, ES, S> {
     pub fn new(
-        tensor: &Tensor<Line<EG>>,
+        tensor: VirtualTensor<EG>,
         x_offset: u32,
         y_offset: u32,
         batch_offset: u32,
@@ -80,7 +81,7 @@ impl<EG: Numeric, ES: Numeric, S: stage::Config> LhsBufferLoader<EG, ES, S> {
         LhsBufferLoader::<EG, ES, S> {
             tensor_view,
             stage,
-            buffer_iter: 0,
+            buffer_iter: 0u32.runtime(),
             num_buffers: config.stage_dim(Ident::Lhs).num_tiles_y_dim(),
             is_producer,
             _config: PhantomData::<S>.runtime(),
@@ -122,7 +123,7 @@ impl<EG: Numeric, ES: Numeric, S: stage::Config> Loader<EG, ES, specialized::Con
 #[cube]
 impl<EG: Numeric, ES: Numeric, S: stage::Config> RhsBufferLoader<EG, ES, S> {
     pub fn new(
-        tensor: &Tensor<Line<EG>>,
+        tensor: VirtualTensor<EG>,
         x_offset: u32,
         y_offset: u32,
         batch_offset: u32,
@@ -135,7 +136,7 @@ impl<EG: Numeric, ES: Numeric, S: stage::Config> RhsBufferLoader<EG, ES, S> {
         RhsBufferLoader::<EG, ES, S> {
             tensor_view,
             stage,
-            buffer_iter: 0,
+            buffer_iter: 0u32.runtime(),
             num_buffers: config.stage_dim(Ident::Rhs).num_tiles_x_dim(),
             is_producer,
             _config: PhantomData::<S>.runtime(),

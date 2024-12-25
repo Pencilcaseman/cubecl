@@ -1,6 +1,6 @@
 use cubecl_core::calculate_cube_count_elemwise;
 use cubecl_core::prelude::*;
-use cubecl_core::tensor_line_size;
+use cubecl_core::tensor_line_size_parallel;
 use cubecl_core::Runtime;
 use cubecl_runtime::server::Handle;
 use std::marker::PhantomData;
@@ -143,8 +143,8 @@ where
         let rank = shape.len();
         let output = Self::empty(client, shape);
 
-        let vectorization_factor = tensor_line_size(
-            R::supported_line_sizes(),
+        let vectorization_factor = tensor_line_size_parallel(
+            R::supported_line_sizes().iter().cloned(),
             &output.shape,
             &output.strides,
             rank - 1,

@@ -1,7 +1,8 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
-    AngleBracketedGenericArguments, Ident, Lit, Member, Pat, Path, PathArguments, PathSegment, Type,
+    AngleBracketedGenericArguments, Ident, Lit, LitStr, Member, Pat, Path, PathArguments,
+    PathSegment, Type,
 };
 
 use crate::{
@@ -17,11 +18,13 @@ pub enum Expression {
         operator: Operator,
         right: Box<Expression>,
         ty: Option<Type>,
+        span: Span,
     },
     Unary {
         input: Box<Expression>,
         operator: Operator,
         ty: Option<Type>,
+        span: Span,
     },
     Variable(ManagedVar),
     FieldAccess {
@@ -45,6 +48,7 @@ pub enum Expression {
         func: Box<Expression>,
         args: Vec<Expression>,
         associated_type: Option<(Path, PathSegment)>,
+        span: Span,
     },
     CompilerIntrinsic {
         func: Path,
@@ -55,6 +59,7 @@ pub enum Expression {
         method: Ident,
         generics: Option<AngleBracketedGenericArguments>,
         args: Vec<Expression>,
+        span: Span,
     },
     Closure {
         params: Vec<Pat>,
@@ -117,6 +122,7 @@ pub enum Expression {
     Index {
         expr: Box<Expression>,
         index: Box<Expression>,
+        span: Span,
     },
     Slice {
         expr: Box<Expression>,
@@ -140,6 +146,9 @@ pub enum Expression {
     ConstMatch {
         const_expr: syn::Expr,
         arms: Vec<ConstMatchArm>,
+    },
+    Comment {
+        content: LitStr,
     },
 }
 
@@ -191,6 +200,7 @@ impl Expression {
             Expression::Keyword { .. } => None,
             Expression::CompilerIntrinsic { .. } => None,
             Expression::ConstMatch { .. } => None,
+            Expression::Comment { .. } => None,
         }
     }
 
@@ -207,6 +217,16 @@ impl Expression {
             Expression::Tuple { elements, .. } => elements.iter().all(|it| it.is_const()),
             Expression::CompilerIntrinsic { .. } => true,
             _ => false,
+        }
+    }
+
+    pub fn as_const_primitive(&self, _context: &mut Context) -> Option<TokenStream> {
+        match self {
+            Expression::Literal { value, .. } => match value {
+                Lit::Int(_) | Lit::Float(_) | Lit::Bool(_) => Some(quote![#value]),
+                _ => None,
+            },
+            _ => None,
         }
     }
 

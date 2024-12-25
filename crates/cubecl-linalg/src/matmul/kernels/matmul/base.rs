@@ -1,14 +1,16 @@
+use core::any::TypeId;
 use cubecl_core::prelude::*;
 
 use cubecl_core::{
-    client::ComputeClient,
-    frontend::{TensorArg, TensorHandleRef},
-    tensor_line_size, Runtime,
+    client::ComputeClient, frontend::TensorHandleRef, tensor_line_size_parallel, Runtime,
 };
 
 use crate::matmul;
-use crate::matmul::components::{MatmulLaunch, MatmulProblem};
-use crate::matmul::kernels::MatmulLaunchError;
+use crate::matmul::components::global::args::TensorInputsLaunch;
+use crate::matmul::components::{
+    InputRuntimeArg, MatmulLaunch, MatmulProblem, MatmulSpec, OutputRuntimeArg, SingleMatmulSpec,
+};
+use crate::matmul::kernels::{MatmulAvailabilityError, MatmulLaunchError};
 use crate::tensor::{into_contiguous, matrix_layout, MatrixLayout, TensorHandle};
 
 use super::algorithm::{CmmaSelector, PlaneMmaSelector};
@@ -113,13 +115,24 @@ fn matmul_cmma_ref_no_check<R: Runtime, EG: Numeric>(
     let k = lhs.shape[rank - 1] as u32;
     let n = rhs.shape[rank - 1] as u32;
 
-    let available_vectorizations = R::supported_line_sizes();
-    let lhs_line_size =
-        tensor_line_size(available_vectorizations, lhs.shape, lhs.strides, rank - 1);
-    let rhs_line_size =
-        tensor_line_size(available_vectorizations, rhs.shape, rhs.strides, rank - 1);
-    let out_line_size =
-        tensor_line_size(available_vectorizations, out.shape, out.strides, rank - 1);
+    let lhs_line_size = tensor_line_size_parallel(
+        R::line_size_elem(&EG::as_elem()),
+        lhs.shape,
+        lhs.strides,
+        rank - 1,
+    );
+    let rhs_line_size = tensor_line_size_parallel(
+        R::line_size_elem(&EG::as_elem()),
+        rhs.shape,
+        rhs.strides,
+        rank - 1,
+    );
+    let out_line_size = tensor_line_size_parallel(
+        R::line_size_elem(&EG::as_elem()),
+        out.shape,
+        out.strides,
+        rank - 1,
+    );
 
     let problem = MatmulProblem {
         m: m as usize,
@@ -142,29 +155,97 @@ fn matmul_cmma_ref_no_check<R: Runtime, EG: Numeric>(
         out_line_size,
     };
 
-    matmul_select_kernel::<R, EG>(client, lhs, rhs, out, problem, disable_cmma)
-}
+    let plane_size = client
+        .properties()
+        .hardware_properties()
+        .defined_plane_size();
 
-fn matmul_select_kernel<R: Runtime, EG: Numeric>(
-    client: &ComputeClient<R::Server, R::Channel>,
-    lhs: &TensorHandleRef<'_, R>,
-    rhs: &TensorHandleRef<'_, R>,
-    out: &TensorHandleRef<'_, R>,
-    problem: MatmulProblem,
-    disable_cmma: bool,
-) -> Result<(), MatmulLaunchError> {
-    if disable_cmma {
-        PlaneMmaSelector::select_kernel::<R, EG>(client, lhs, rhs, out, problem)
-    } else {
-        CmmaSelector::select_kernel::<R, EG>(client, lhs, rhs, out, problem)
+    match plane_size {
+        Some(32) => matmul_launch_kernel::<32, R, EG>(
+            client,
+            lhs,
+            rhs,
+            out,
+            disable_cmma,
+            (lhs_line_size, rhs_line_size, out_line_size),
+            problem,
+        ),
+        Some(64) => matmul_launch_kernel::<64, R, EG>(
+            client,
+            lhs,
+            rhs,
+            out,
+            disable_cmma,
+            (lhs_line_size, rhs_line_size, out_line_size),
+            problem,
+        ),
+        Some(plane_dim) => Err(MatmulLaunchError::Unavailable(
+            MatmulAvailabilityError::PlaneDimUnsupported { plane_dim },
+        )),
+        None => Err(MatmulLaunchError::Unavailable(
+            MatmulAvailabilityError::PlaneDimUnknown,
+        )),
     }
 }
 
-pub(crate) fn matmul_cube_preparation<R: Runtime, EG: Numeric, D: Algorithm<EG>>(
+fn matmul_launch_kernel<const PLANE_DIM: u32, R: Runtime, EG: Numeric>(
     client: &ComputeClient<R::Server, R::Channel>,
     lhs: &TensorHandleRef<'_, R>,
     rhs: &TensorHandleRef<'_, R>,
     out: &TensorHandleRef<'_, R>,
+    disable_cmma: bool,
+    (lhs_line_size, rhs_line_size, out_line_size): (u8, u8, u8),
+    problem: MatmulProblem,
+) -> Result<(), MatmulLaunchError> {
+    if disable_cmma {
+        PlaneMmaSelector::select_kernel::<SingleMatmulSpec<{ PLANE_DIM }, EG, EG, f32>, R>(
+            client,
+            TensorInputsLaunch::new(
+                lhs.as_tensor_arg(lhs_line_size),
+                rhs.as_tensor_arg(rhs_line_size),
+            ),
+            out.as_tensor_arg(out_line_size),
+            problem,
+        )
+    } else if TypeId::of::<EG>() == TypeId::of::<half::f16>()
+        || TypeId::of::<EG>() == TypeId::of::<flex32>()
+    {
+        CmmaSelector::select_kernel::<SingleMatmulSpec<{ PLANE_DIM }, EG, half::f16, f32>, R>(
+            client,
+            TensorInputsLaunch::new(
+                lhs.as_tensor_arg(lhs_line_size),
+                rhs.as_tensor_arg(rhs_line_size),
+            ),
+            out.as_tensor_arg(out_line_size),
+            problem,
+        )
+    } else if TypeId::of::<EG>() == TypeId::of::<half::bf16>() {
+        CmmaSelector::select_kernel::<SingleMatmulSpec<{ PLANE_DIM }, EG, half::bf16, f32>, R>(
+            client,
+            TensorInputsLaunch::new(
+                lhs.as_tensor_arg(lhs_line_size),
+                rhs.as_tensor_arg(rhs_line_size),
+            ),
+            out.as_tensor_arg(out_line_size),
+            problem,
+        )
+    } else {
+        CmmaSelector::select_kernel::<SingleMatmulSpec<{ PLANE_DIM }, EG, tf32, f32>, R>(
+            client,
+            TensorInputsLaunch::new(
+                lhs.as_tensor_arg(lhs_line_size),
+                rhs.as_tensor_arg(rhs_line_size),
+            ),
+            out.as_tensor_arg(out_line_size),
+            problem,
+        )
+    }
+}
+
+pub(crate) fn matmul_cube_preparation<'a, MS: MatmulSpec, R: Runtime, D: Algorithm<MS>>(
+    client: &ComputeClient<R::Server, R::Channel>,
+    input: InputRuntimeArg<'a, MS, R>,
+    output: OutputRuntimeArg<'a, MS, R>,
     problem: MatmulProblem,
 ) -> Result<(), MatmulLaunchError> {
     D::check_availability::<R>(client)?;
@@ -173,11 +254,10 @@ pub(crate) fn matmul_cube_preparation<R: Runtime, EG: Numeric, D: Algorithm<EG>>
     let cube_count = D::cube_count(&problem);
     let advanced_config = D::advanced_config();
 
-    launch_matmul::<R, EG, D>(
+    launch_matmul::<MS, R, D>(
         client,
-        lhs,
-        rhs,
-        out,
+        input,
+        output,
         problem,
         cube_dim,
         cube_count,
@@ -186,11 +266,10 @@ pub(crate) fn matmul_cube_preparation<R: Runtime, EG: Numeric, D: Algorithm<EG>>
 }
 
 #[allow(clippy::too_many_arguments)]
-fn launch_matmul<R: Runtime, EG: Numeric, D: Algorithm<EG>>(
+fn launch_matmul<'a, MS: MatmulSpec, R: Runtime, D: Algorithm<MS>>(
     client: &ComputeClient<R::Server, R::Channel>,
-    lhs: &TensorHandleRef<'_, R>,
-    rhs: &TensorHandleRef<'_, R>,
-    out: &TensorHandleRef<'_, R>,
+    input: InputRuntimeArg<'a, MS, R>,
+    output: OutputRuntimeArg<'a, MS, R>,
     problem: MatmulProblem,
     cube_dim: CubeDim,
     cube_count: CubeCount,
@@ -199,30 +278,7 @@ fn launch_matmul<R: Runtime, EG: Numeric, D: Algorithm<EG>>(
     let config = D::make_config(&problem, &cube_dim, &cube_count, &advanced_config)?;
 
     unsafe {
-        D::BatchMatmul::launch_unchecked::<R>(
-            client,
-            cube_dim,
-            cube_count,
-            TensorArg::<R>::from_raw_parts::<D::EG>(
-                lhs.handle,
-                lhs.strides,
-                lhs.shape,
-                problem.lhs_line_size,
-            ),
-            TensorArg::<R>::from_raw_parts::<D::EG>(
-                rhs.handle,
-                rhs.strides,
-                rhs.shape,
-                problem.rhs_line_size,
-            ),
-            TensorArg::<R>::from_raw_parts::<D::EG>(
-                out.handle,
-                out.strides,
-                out.shape,
-                problem.out_line_size,
-            ),
-            config,
-        );
+        D::BatchMatmul::launch_unchecked::<R>(client, cube_dim, cube_count, input, output, config);
     };
 
     Ok(())

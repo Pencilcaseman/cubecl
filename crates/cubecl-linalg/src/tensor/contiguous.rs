@@ -1,6 +1,6 @@
 use super::TensorHandle;
 use cubecl::prelude::*;
-use cubecl_core::{self as cubecl, calculate_cube_count_elemwise, tensor_line_size};
+use cubecl_core::{self as cubecl, calculate_cube_count_elemwise, tensor_line_size_parallel};
 
 /// Returns the offset of the tensor corresponding to the layout tensor.
 #[cube]
@@ -32,9 +32,9 @@ fn into_contiguous_kernel<N: CubePrimitive>(
     #[comptime] elems_per_thread: u32,
 ) {
     let offset_output = ABSOLUTE_POS * elems_per_thread;
-    let vec = vectorization_of(input);
+    let line_size = input.line_size();
 
-    let mut registers = Array::vectorized(elems_per_thread, vec);
+    let mut registers = Array::vectorized(elems_per_thread, line_size);
 
     #[unroll]
     for i in 0..elems_per_thread {
@@ -64,8 +64,8 @@ pub fn into_contiguous<R: Runtime, E: CubePrimitive>(
     let num_elems: usize = input.shape.iter().product();
     // Vectorization is only enabled when the last dimension is contiguous.
     let rank = input.strides.len();
-    let vectorization_factor = tensor_line_size(
-        R::supported_line_sizes(),
+    let vectorization_factor = tensor_line_size_parallel(
+        R::supported_line_sizes().iter().cloned(),
         input.shape,
         input.strides,
         rank - 1,
@@ -92,8 +92,8 @@ pub fn into_contiguous_prefetch<R: Runtime, E: CubePrimitive>(
 ) -> TensorHandle<R, E> {
     // Vectorization is only enabled when the last dimension is contiguous.
     let rank = input.strides.len();
-    let vectorization_factor = tensor_line_size(
-        R::supported_line_sizes(),
+    let vectorization_factor = tensor_line_size_parallel(
+        R::supported_line_sizes().iter().cloned(),
         input.shape,
         input.strides,
         rank - 1,

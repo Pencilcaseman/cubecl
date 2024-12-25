@@ -13,6 +13,7 @@ pub type SupportedWmmaCombinations = Vec<(gpu::Elem, gpu::Elem, gpu::Elem, Vec<(
 pub trait Architecture: FromStr<Err = String> {
     fn warp_size(&self) -> u32;
     fn is_wmma_capable(&self) -> bool;
+    fn is_mfma_capable(&self) -> bool;
 }
 
 pub trait WmmaCompiler<D: Dialect>:
@@ -20,7 +21,7 @@ pub trait WmmaCompiler<D: Dialect>:
 {
     type Architecture: Architecture;
 
-    fn includes(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+    fn wmma_includes(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
     fn deftypes(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
     fn local_variables(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
 
@@ -188,7 +189,13 @@ pub mod wmma_api_base {
     ) -> std::fmt::Result {
         let elem = match fragment.elem {
             Elem::TF32 => format!("{namespace}::precision::tf32"),
-            Elem::BF16 => format!("{}", Elem::<D>::F16), // Normally not supported except for cast.
+            Elem::BF16 => {
+                if fragment.ident == FragmentIdent::Accumulator {
+                    format!("{}", Elem::<D>::F16) // Normally not supported except for cast.
+                } else {
+                    format!("{}", fragment.elem)
+                }
+            }
             elem => format!("{elem}"),
         };
         match fragment.layout {

@@ -3,8 +3,9 @@ use cubecl_cpp::shared::CompilationOptions;
 
 use crate::runtime::HipCompiler;
 
+use super::fence::{Fence, SyncStream};
 use super::storage::HipStorage;
-use super::HipResource;
+use super::{uninit_vec, HipResource};
 use cubecl_core::compute::DebugInformation;
 use cubecl_core::ir::CubeDim;
 use cubecl_core::Feature;
@@ -33,7 +34,6 @@ pub struct HipServer {
 
 #[derive(Debug)]
 pub(crate) struct HipContext {
-    context: cubecl_hip_sys::hipCtx_t,
     stream: cubecl_hip_sys::hipStream_t,
     memory_management: MemoryManagement<HipStorage>,
     module_names: HashMap<KernelId, HipCompiledKernel>,
@@ -82,8 +82,7 @@ impl HipServer {
             binding.offset_end,
         );
 
-        // TODO: Check if it is possible to make this faster
-        let mut data = vec![0; resource.size as usize];
+        let mut data = uninit_vec(resource.size as usize);
         unsafe {
             let status = cubecl_hip_sys::hipMemcpyDtoHAsync(
                 data.as_mut_ptr() as *mut _,
@@ -96,6 +95,54 @@ impl HipServer {
         ctx.sync();
         data
     }
+
+    fn read_async(
+        &mut self,
+        bindings: Vec<server::Binding>,
+    ) -> impl Future<Output = Vec<Vec<u8>>> + 'static + Send {
+        let ctx = self.get_context();
+        let mut result = Vec::with_capacity(bindings.len());
+
+        for binding in bindings {
+            let resource = ctx.memory_management.get_resource(
+                binding.memory,
+                binding.offset_start,
+                binding.offset_end,
+            );
+
+            let mut data = uninit_vec(resource.size as usize);
+            unsafe {
+                let status = cubecl_hip_sys::hipMemcpyDtoHAsync(
+                    data.as_mut_ptr() as *mut _,
+                    resource.ptr,
+                    resource.size as usize,
+                    ctx.stream,
+                );
+                assert_eq!(status, HIP_SUCCESS, "Should copy data from device to host");
+            };
+            result.push(data);
+        }
+
+        let fence = ctx.fence();
+
+        async move {
+            fence.wait();
+            result
+        }
+    }
+
+    fn sync_stream_async(&mut self) -> impl Future<Output = ()> + 'static + Send {
+        let ctx = self.get_context();
+        // We can't use a fence here because no action has been recorded on the context.
+        // We need at least one action to be recorded after the context is initialized
+        // with `cudarc::driver::result::ctx::set_current(self.ctx.context)` for the fence
+        // to have any effect. Otherwise, it seems to be ignored.
+        let sync = ctx.lazy_sync_stream();
+
+        async move {
+            sync.wait();
+        }
+    }
 }
 
 impl ComputeServer for HipServer {
@@ -107,11 +154,7 @@ impl ComputeServer for HipServer {
         &mut self,
         bindings: Vec<server::Binding>,
     ) -> impl Future<Output = Vec<Vec<u8>>> + 'static {
-        let value = bindings
-            .into_iter()
-            .map(|binding| self.read_sync(binding))
-            .collect();
-        async { value }
+        self.read_async(bindings)
     }
 
     fn memory_usage(&self) -> MemoryUsage {
@@ -198,6 +241,7 @@ impl ComputeServer for HipServer {
             .collect::<Vec<_>>();
 
         if let Some(level) = profile_level {
+            ctx.sync();
             let start = std::time::SystemTime::now();
             ctx.execute_task(kernel_id, count, resources);
             ctx.sync();
@@ -220,7 +264,6 @@ impl ComputeServer for HipServer {
                 .register_profiled(info, start.elapsed().unwrap());
         } else {
             ctx.execute_task(kernel_id, count, resources);
-            ctx.sync();
         }
     }
 
@@ -228,10 +271,7 @@ impl ComputeServer for HipServer {
 
     fn sync(&mut self) -> impl Future<Output = ()> + 'static {
         self.logger.profile_summary();
-
-        let ctx = self.get_context();
-        ctx.sync();
-        async move {}
+        self.sync_stream_async()
     }
 
     fn sync_elapsed(&mut self) -> impl Future<Output = TimestampsResult> + 'static {
@@ -280,16 +320,22 @@ impl HipContext {
         memory_management: MemoryManagement<HipStorage>,
         compilation_options: CompilationOptions,
         stream: cubecl_hip_sys::hipStream_t,
-        context: cubecl_hip_sys::hipCtx_t,
     ) -> Self {
         Self {
             memory_management,
             module_names: HashMap::new(),
             stream,
-            context,
             timestamps: KernelTimestamps::Disabled,
             compilation_options,
         }
+    }
+
+    fn fence(&mut self) -> Fence {
+        Fence::new(self.stream)
+    }
+
+    fn lazy_sync_stream(&mut self) -> SyncStream {
+        SyncStream::new(self.stream)
     }
 
     fn sync(&mut self) {
@@ -487,9 +533,6 @@ impl HipServer {
     }
 
     fn get_context_with_logger(&mut self) -> (&mut HipContext, &mut DebugLogger) {
-        unsafe {
-            cubecl_hip_sys::hipCtxSetCurrent(self.ctx.context);
-        };
         (&mut self.ctx, &mut self.logger)
     }
 }

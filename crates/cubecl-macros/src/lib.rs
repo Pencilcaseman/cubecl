@@ -111,7 +111,7 @@ pub fn module_derive_cube_launch(input: TokenStream) -> TokenStream {
 }
 
 /// Derive macro to define a cube type that is not launched
-#[proc_macro_derive(CubeType, attributes(expand))]
+#[proc_macro_derive(CubeType, attributes(expand, cube))]
 pub fn module_derive_cube_type(input: TokenStream) -> TokenStream {
     gen_cube_type(input, false)
 }
@@ -147,6 +147,23 @@ fn gen_cube_type(input: TokenStream, with_launch: bool) -> TokenStream {
 /// ```
 #[proc_macro]
 pub fn comptime(input: TokenStream) -> TokenStream {
+    let tokens: proc_macro2::TokenStream = input.into();
+    quote![{ #tokens }].into()
+}
+
+/// Insert a literal comment into the kernel source code.
+///
+/// # Example
+/// ```ignored
+/// #use cubecl_macros::cube;
+/// #[cube]
+/// fn do_stuff(input: u32) -> u32 {
+///     comment!("Add five to the input");
+///     input + 5
+/// }
+/// ```
+#[proc_macro]
+pub fn comment(input: TokenStream) -> TokenStream {
     let tokens: proc_macro2::TokenStream = input.into();
     quote![{ #tokens }].into()
 }

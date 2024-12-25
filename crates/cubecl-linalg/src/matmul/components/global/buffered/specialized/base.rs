@@ -1,15 +1,16 @@
 use crate::matmul::components::global::unloader::Unloader;
 use crate::matmul::components::global::{Config as _, Loader};
-use crate::matmul::components::stage;
 use crate::matmul::components::stage::single_buffer::{LhsBufferReader, RhsBufferReader};
 use crate::matmul::components::stage::TilingOrderConfig;
 use crate::matmul::components::MatmulKernel;
 use crate::matmul::components::StageDim;
 use crate::matmul::components::{config::MatmulConfig, global::ZeroAccumulatorLoader};
 use crate::matmul::components::{global, MatmulProblem};
+use crate::matmul::components::{stage, MatmulSpec};
 use crate::matmul::components::{Ident, MatrixLayout};
 use crate::matmul::kernels::matmul::AdvancedConfig;
 use crate::matmul::kernels::MatmulAvailabilityError;
+use crate::tensor::{ReadWrite, VirtualTensor};
 
 use cubecl_core as cubecl;
 use cubecl_core::prelude::*;
@@ -22,31 +23,26 @@ use super::loader::{LhsBufferLoader, RhsBufferLoader};
 /// - Remaining planes load data to the stage
 ///
 /// Both roles alternate the buffer (tile index in dimension k) they are working on
-pub struct Matmul<EG: Numeric, ES: Numeric, Acc: Numeric, SMM: stage::Matmul<ES, EG, Acc>> {
-    _eg: PhantomData<EG>,
-    _es: PhantomData<ES>,
-    _acc: PhantomData<Acc>,
+pub struct Matmul<MS: MatmulSpec, SMM: stage::Matmul<MS::ES, MS::EG, MS::EA>> {
+    _ms: PhantomData<MS>,
     _stage_matmul: PhantomData<SMM>,
 }
 
 #[cube]
-impl<EG, ES, Acc, SMM> global::Matmul<EG, ES> for Matmul<EG, ES, Acc, SMM>
+impl<MS: MatmulSpec, SMM> global::Matmul<MS> for Matmul<MS, SMM>
 where
-    EG: Numeric,
-    ES: Numeric,
-    Acc: Numeric,
     SMM: stage::Matmul<
-        ES,
-        EG,
-        Acc,
-        LhsReader = LhsBufferReader<ES>,
-        RhsReader = RhsBufferReader<ES>,
+        MS::ES,
+        MS::EG,
+        MS::EA,
+        LhsReader = LhsBufferReader<MS::ES>,
+        RhsReader = RhsBufferReader<MS::ES>,
     >,
 {
-    type LhsLoader = LhsBufferLoader<EG, ES, SMM::Config>;
-    type RhsLoader = RhsBufferLoader<EG, ES, SMM::Config>;
+    type LhsLoader = LhsBufferLoader<MS::EG, MS::ES, SMM::Config>;
+    type RhsLoader = RhsBufferLoader<MS::EG, MS::ES, SMM::Config>;
     type AccumulatorLoader = ZeroAccumulatorLoader;
-    type Out = Unloader<EG>;
+    type Out = Unloader<MS::EG>;
     type Accumulator = SMM::Accumulator;
 
     fn execute(
@@ -74,6 +70,7 @@ where
         for _ in 0..num_loops {
             Self::LhsLoader::fill_stage(&mut lhs_loader, config);
             Self::RhsLoader::fill_stage(&mut rhs_loader, config);
+
             let lhs_stage_reader = &Self::LhsLoader::as_stage_reader(&lhs_loader);
             let rhs_stage_reader = &Self::RhsLoader::as_stage_reader(&rhs_loader);
 
@@ -105,7 +102,7 @@ where
     }
 
     fn init_lhs_loader(
-        lhs: &Tensor<Line<EG>>,
+        lhs: VirtualTensor<MS::EG>,
         x_offset: u32,
         y_offset: u32,
         batch_offset: u32,
@@ -122,7 +119,7 @@ where
     }
 
     fn init_rhs_loader(
-        rhs: &Tensor<Line<EG>>,
+        rhs: VirtualTensor<MS::EG>,
         x_offset: u32,
         y_offset: u32,
         batch_offset: u32,
@@ -139,7 +136,7 @@ where
     }
 
     fn init_unloader(
-        out: &mut Tensor<Line<EG>>,
+        out: VirtualTensor<MS::EG, ReadWrite>,
         x_offset: u32,
         y_offset: u32,
         batch_offset: u32,
@@ -157,20 +154,16 @@ where
 }
 
 #[cube]
-impl<EG: Numeric, ES: Numeric, Acc: Numeric, SMM: stage::Matmul<ES, EG, Acc>>
-    Matmul<EG, ES, Acc, SMM>
-{
-    fn is_consumer(#[comptime] config: <Self as MatmulKernel<EG, EG>>::Config) -> bool {
+impl<MS: MatmulSpec, SMM: stage::Matmul<MS::ES, MS::EG, MS::EA>> Matmul<MS, SMM> {
+    fn is_consumer(#[comptime] config: <Self as MatmulKernel>::Config) -> bool {
         UNIT_POS_Y < config.num_consumers()
     }
 }
 
-impl<EG, ES, Acc, SMM> MatmulKernel<EG, EG> for Matmul<EG, ES, Acc, SMM>
+impl<MS, SMM> MatmulKernel for Matmul<MS, SMM>
 where
-    EG: Numeric,
-    ES: Numeric,
-    Acc: Numeric,
-    SMM: stage::Matmul<ES, EG, Acc>,
+    MS: MatmulSpec,
+    SMM: stage::Matmul<MS::ES, MS::EG, MS::EA>,
 {
     type Config = Config<SMM::Config>;
 

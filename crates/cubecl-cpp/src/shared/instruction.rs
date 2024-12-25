@@ -50,12 +50,6 @@ pub enum Instruction<D: Dialect> {
     Sub(BinaryInstruction<D>),
     Index(BinaryInstruction<D>),
     IndexAssign(BinaryInstruction<D>),
-    CheckedIndex {
-        len: Variable<D>,
-        lhs: Variable<D>,
-        rhs: Variable<D>,
-        out: Variable<D>,
-    },
     Assign(UnaryInstruction<D>),
     RangeLoop {
         i: Variable<D>,
@@ -97,6 +91,13 @@ pub enum Instruction<D: Dialect> {
         start: Variable<D>,
         end: Variable<D>,
         out: Variable<D>,
+    },
+    CheckedSlice {
+        input: Variable<D>,
+        start: Variable<D>,
+        end: Variable<D>,
+        out: Variable<D>,
+        len: Variable<D>,
     },
     Return,
     Break,
@@ -173,6 +174,13 @@ pub enum Instruction<D: Dialect> {
         out_index: Variable<D>,
         len: u32,
     },
+    Printf {
+        format_string: String,
+        args: Vec<Variable<D>>,
+    },
+    Comment {
+        content: String,
+    },
 }
 
 impl<D: Dialect> Display for Instruction<D> {
@@ -195,7 +203,18 @@ impl<D: Dialect> Display for Instruction<D> {
                 out,
             } => {
                 let item = out.item();
-                writeln!(f, "const uint {out}_length = {end} - {start};")?;
+                writeln!(f, "const uint {out}_length = {end};")?;
+                writeln!(f, "{item} *{out} = {input} + {start};")
+            }
+            Instruction::CheckedSlice {
+                input,
+                start,
+                end,
+                out,
+                len,
+            } => {
+                let item = out.item();
+                writeln!(f, "const uint {out}_length = min({len}, {end}) - {start};")?;
                 writeln!(f, "{item} *{out} = {input} + {start};")
             }
             Instruction::Mul(it) => Mul::format(f, &it.lhs, &it.rhs, &it.out),
@@ -208,21 +227,6 @@ impl<D: Dialect> Display for Instruction<D> {
             Instruction::ShiftLeft(it) => ShiftLeft::format(f, &it.lhs, &it.rhs, &it.out),
             Instruction::ShiftRight(it) => ShiftRight::format(f, &it.lhs, &it.rhs, &it.out),
             Instruction::Index(it) => Index::format(f, &it.lhs, &it.rhs, &it.out),
-            Instruction::CheckedIndex { len, lhs, rhs, out } => {
-                let item_out = out.item();
-                if let Elem::Atomic(inner) = item_out.elem {
-                    write!(f, "{inner}* {out} = &{lhs}[{rhs}];")
-                } else {
-                    let out = out.fmt_left();
-                    write!(f, "{out} = ({rhs} < {len}) ? ")?;
-                    Index::format_scalar(f, *lhs, *rhs, item_out)?;
-                    if item_out.vectorization == 1 {
-                        writeln!(f, " : {item_out}(0);")
-                    } else {
-                        writeln!(f, " : {item_out}{{}};")
-                    }
-                }
-            }
             Instruction::IndexAssign(it) => IndexAssign::format(f, &it.lhs, &it.rhs, &it.out),
             Instruction::Copy {
                 input,
@@ -522,8 +526,34 @@ for ({i_ty} {i} = {start}; {i} {cmp} {end}; {increment}) {{
                 let out = out.fmt_left();
                 writeln!(f, "{out} = {item}{{{}}};", inputs.join(","))
             }
+            Instruction::Printf {
+                format_string,
+                args,
+            } => {
+                let format_string = escape_string(format_string);
+                let args = args.iter().map(|arg| format!("{arg}")).collect::<Vec<_>>();
+                let args = match args.is_empty() {
+                    true => "".to_string(),
+                    false => format!(", {}", args.join(",")),
+                };
+                writeln!(f, "printf(\"{format_string}\"{args});")
+            }
+            Instruction::Comment { content } => {
+                if content.contains('\n') {
+                    writeln!(f, "/* {content} */")
+                } else {
+                    writeln!(f, "// {content}")
+                }
+            }
         }
     }
+}
+
+fn escape_string(format_string: &str) -> String {
+    format_string
+        .replace("\t", "\\t")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
 }
 
 struct Fma<D: Dialect> {

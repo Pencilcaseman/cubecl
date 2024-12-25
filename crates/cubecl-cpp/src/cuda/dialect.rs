@@ -10,8 +10,8 @@ pub struct CudaDialect<M> {
 impl<M: WmmaCompiler<Self>> WmmaCompiler<Self> for CudaDialect<M> {
     type Architecture = M::Architecture;
 
-    fn includes(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        M::includes(f)
+    fn wmma_includes(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        M::wmma_includes(f)
     }
 
     fn deftypes(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -66,10 +66,6 @@ impl<M: WmmaCompiler<Self>> Dialect for CudaDialect<M> {
     }
     fn include_runtime(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("#include <cuda_runtime.h>\n")
-    }
-
-    fn include_wmma(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("#include <mma.h>\n")
     }
 
     fn bfloat16_type_name(f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

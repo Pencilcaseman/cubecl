@@ -62,13 +62,6 @@ pub enum Instruction {
         rhs: Variable,
         out: Variable,
     },
-    // Index handles casting to correct local variable.
-    CheckedIndex {
-        len: Variable,
-        lhs: Variable,
-        rhs: Variable,
-        out: Variable,
-    },
     // Index assign handles casting to correct output variable.
     IndexAssign {
         lhs: Variable,
@@ -267,6 +260,13 @@ pub enum Instruction {
         end: Variable,
         out: Variable,
     },
+    CheckedSlice {
+        input: Variable,
+        start: Variable,
+        end: Variable,
+        out: Variable,
+        len: Variable, // The length of the input.
+    },
     Bitcast {
         input: Variable,
         out: Variable,
@@ -360,6 +360,9 @@ pub enum Instruction {
         out_index: Variable,
         len: u32,
     },
+    Comment {
+        content: String,
+    },
 }
 
 impl Display for Instruction {
@@ -386,6 +389,17 @@ impl Display for Instruction {
             } => {
                 writeln!(f, "let {out}_offset = {start};")?;
                 writeln!(f, "let {out}_length = {end} - {start};")?;
+                writeln!(f, "let {out}_ptr = &{input};")
+            }
+            Instruction::CheckedSlice {
+                input,
+                start,
+                end,
+                out,
+                len,
+            } => {
+                writeln!(f, "let {out}_offset = {start};")?;
+                writeln!(f, "let {out}_length = min({len}, {end}) - {start};")?;
                 writeln!(f, "let {out}_ptr = &{input};")
             }
             Instruction::Fma { a, b, c, out } => {
@@ -679,22 +693,6 @@ for (var {i}: {i_ty} = {start}; {i} {cmp} {end}; {increment}) {{
 
                 f.write_str("}\n")
             }
-            Instruction::CheckedIndex { len, lhs, rhs, out } => match lhs {
-                Variable::Slice { item, .. } => {
-                    let offset = Variable::Named {
-                        name: format!("{lhs}_offset"),
-                        item: Item::Scalar(Elem::U32),
-                        is_array: false,
-                    };
-                    let lhs = Variable::Named {
-                        name: format!("(*{lhs}_ptr)"),
-                        item: *item,
-                        is_array: true,
-                    };
-                    index(f, &lhs, rhs, out, Some(offset), Some(len))
-                }
-                _ => index(f, lhs, rhs, out, None, Some(len)),
-            },
             Instruction::If { cond, instructions } => {
                 writeln!(f, "if {cond} {{")?;
                 for i in instructions {
@@ -909,6 +907,13 @@ for (var {i}: {i_ty} = {start}; {i} {cmp} {end}; {increment}) {{
                 let out = out.fmt_left();
                 writeln!(f, "{out} = {item}({})", inputs.join(", "))
             }
+            Instruction::Comment { content } => {
+                if content.contains('\n') {
+                    writeln!(f, "/* {content} */")
+                } else {
+                    writeln!(f, "// {content}")
+                }
+            }
         }
     }
 }
@@ -1046,13 +1051,13 @@ fn index(
     let (mut value, index) = if is_scalar {
         (format!("{lhs}"), None)
     } else {
-        let index = if let Some(offset) = offset {
-            format!("{rhs}+{offset}")
+        let value = if let Some(offset) = offset {
+            format!("{lhs}[{rhs}+{offset}]")
         } else {
-            format!("{rhs}")
+            format!("{lhs}[{rhs}]")
         };
 
-        (format!("{lhs}[{index}]"), Some(index))
+        (value, Some(format!("{rhs}")))
     };
 
     if out.item().elem().is_atomic() {
@@ -1140,7 +1145,11 @@ fn index_assign(
                     Item::Scalar(_) => Item::Scalar(elem_out),
                 };
                 let rhs = rhs.fmt_cast_to(casting_type);
-                writeln!(f, "{out}[{lhs}] = {rhs};")
+                if matches!(out.item(), Item::Scalar(_)) {
+                    writeln!(f, "{out} = {rhs};")
+                } else {
+                    writeln!(f, "{out}[{lhs}] = {rhs};")
+                }
             } else {
                 let item_rhs = rhs.item();
                 let item_out = out.item();

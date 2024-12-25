@@ -12,6 +12,7 @@ use cubecl_runtime::{
     channel::MutexComputeChannel,
     client::ComputeClient,
     memory_management::{HardwareProperties, MemoryDeviceProperties, MemoryManagement},
+    storage::ComputeStorage,
     ComputeRuntime, DeviceProperties,
 };
 
@@ -39,14 +40,10 @@ pub type HipCompiler = CppCompiler<HipDialect<HipWmmaCompiler>>;
 type Server = HipServer;
 type Channel = MutexComputeChannel<Server>;
 
-const MEMORY_OFFSET_ALIGNMENT: u64 = 32;
-
 fn create_client<M: WmmaCompiler<HipDialect<M>>>(
     device: &HipDevice,
     options: RuntimeOptions,
 ) -> ComputeClient<Server, Channel> {
-    let mut ctx: cubecl_hip_sys::hipCtx_t = std::ptr::null_mut();
-
     #[allow(unused_assignments)]
     let mut prop_warp_size = 0;
     #[allow(unused_assignments)]
@@ -76,12 +73,6 @@ fn create_client<M: WmmaCompiler<HipDialect<M>>>(
         );
     }
 
-    unsafe {
-        let status =
-            cubecl_hip_sys::hipCtxCreate(&mut ctx, 0, device.index as cubecl_hip_sys::hipDevice_t);
-        assert_eq!(status, HIP_SUCCESS, "Should create the HIP context");
-    };
-
     let stream = unsafe {
         let mut stream: cubecl_hip_sys::hipStream_t = std::ptr::null_mut();
         let stream_status = cubecl_hip_sys::hipStreamCreate(&mut stream);
@@ -105,7 +96,7 @@ fn create_client<M: WmmaCompiler<HipDialect<M>>>(
     let storage = HipStorage::new(stream);
     let mem_properties = MemoryDeviceProperties {
         max_page_size: max_memory as u64 / 4,
-        alignment: MEMORY_OFFSET_ALIGNMENT,
+        alignment: HipStorage::ALIGNMENT,
     };
     let topology = HardwareProperties {
         plane_size_min: prop_warp_size as u32,
@@ -127,7 +118,7 @@ fn create_client<M: WmmaCompiler<HipDialect<M>>>(
     let comp_opts = CompilationOptions {
         warp_size: arch.warp_size(),
     };
-    let hip_ctx = HipContext::new(memory_management, comp_opts, stream, ctx);
+    let hip_ctx = HipContext::new(memory_management, comp_opts, stream);
     let server = HipServer::new(hip_ctx);
     ComputeClient::new(MutexComputeChannel::new(server), device_props)
 }
@@ -153,7 +144,7 @@ impl Runtime for HipRuntime {
     }
 
     fn supported_line_sizes() -> &'static [u8] {
-        &[8, 4, 2]
+        &[8, 4, 2, 1]
     }
 
     fn max_cube_count() -> (u32, u32, u32) {

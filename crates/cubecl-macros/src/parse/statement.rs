@@ -1,8 +1,9 @@
-use quote::format_ident;
-use syn::{Pat, Stmt, Type, TypeReference};
+use quote::{format_ident, quote};
+use syn::{LitStr, Pat, Stmt, Type, TypeReference};
 
 use crate::{
     expression::Expression,
+    paths::core_type,
     scope::Context,
     statement::{Pattern, Statement},
 };
@@ -36,7 +37,36 @@ impl Statement {
                 }
             }
             Stmt::Item(_) => Statement::Skip,
-            stmt => Err(syn::Error::new_spanned(stmt, "Unsupported statement"))?,
+            Stmt::Macro(val) => {
+                if val.mac.path.is_ident("comptime") {
+                    Statement::Expression {
+                        expression: Box::new(Expression::Verbatim {
+                            tokens: val.mac.tokens,
+                        }),
+                        terminated: val.semi_token.is_some(),
+                    }
+                } else if val.mac.path.is_ident("debug_print") {
+                    let expand = core_type("debug_print_expand");
+                    let args = val.mac.tokens;
+                    Statement::Expression {
+                        expression: Box::new(Expression::Verbatim {
+                            tokens: quote![#expand!(context, #args)],
+                        }),
+                        terminated: val.semi_token.is_some(),
+                    }
+                } else if val.mac.path.is_ident("comment") {
+                    let content = syn::parse2::<LitStr>(val.mac.tokens)?;
+                    Statement::Expression {
+                        expression: Box::new(Expression::Comment { content }),
+                        terminated: val.semi_token.is_some(),
+                    }
+                } else {
+                    return Err(syn::Error::new_spanned(
+                        val,
+                        "Unsupported macro".to_string().as_str(),
+                    ));
+                }
+            }
         };
         Ok(statement)
     }

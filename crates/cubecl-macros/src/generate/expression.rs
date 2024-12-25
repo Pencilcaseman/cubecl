@@ -1,5 +1,5 @@
-use proc_macro2::TokenStream;
-use quote::{format_ident, quote, quote_spanned};
+use proc_macro2::{Span, TokenStream};
+use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{spanned::Spanned, Member, PathArguments};
 
 use crate::{
@@ -22,6 +22,7 @@ impl Expression {
                 left,
                 operator,
                 right,
+                span,
                 ..
             } if operator.is_assign() && matches!(**left, Expression::Index { .. }) => {
                 let elem = frontend_type("ExpandElementTyped");
@@ -37,12 +38,16 @@ impl Expression {
                     .map(|as_const| quote![#elem::from_lit(#as_const)])
                     .unwrap_or_else(|| right.to_tokens(context));
                 let op = format_ident!("{}", operator.array_op_name());
+                let expand = with_span(
+                    *span,
+                    quote![#frontend_path::#op::expand(context, _array, _index, _value)],
+                );
                 quote! {
                     {
                         let _array = #array;
                         let _index = #index;
                         let _value = #right;
-                        #frontend_path::#op::expand(context, _array, _index, _value)
+                        #expand
                     }
                 }
             }
@@ -50,17 +55,22 @@ impl Expression {
                 left,
                 operator,
                 right,
+                span,
                 ..
             } => {
                 let frontend_path = frontend_path();
                 let op = format_ident!("{}", operator.op_name());
                 let left = left.to_tokens(context);
                 let right = right.to_tokens(context);
+                let expand = with_span(
+                    *span,
+                    quote![#frontend_path::#op::expand(context, _lhs, _rhs)],
+                );
                 quote! {
                     {
                         let _lhs = #left;
                         let _rhs = #right;
-                        #frontend_path::#op::expand(context, _lhs, _rhs)
+                        #expand
                     }
                 }
             }
@@ -70,35 +80,39 @@ impl Expression {
                 ..
             } => input.to_tokens(context),
             Expression::Unary {
-                input, operator, ..
+                input,
+                operator,
+                span,
+                ..
             } => {
                 let frontend_path = frontend_path();
                 let input = input.to_tokens(context);
                 let op = format_ident!("{}", operator.op_name());
+                let expand = with_span(*span, quote![#frontend_path::#op::expand(context, _inner)]);
                 quote! {
                     {
                         let _inner = #input;
-                        #frontend_path::#op::expand(context, _inner)
+                        #expand
                     }
                 }
             }
             Expression::Keyword { name } => {
                 quote![#name::expand(context)]
             }
-            Expression::Variable(var) if var.is_const => {
-                let name = &var.name;
-                let expand_elem = frontend_type("ExpandElementTyped");
-                quote![#expand_elem::from_lit(#name)]
-            }
             Expression::Variable(var) => {
-                let name = &var.name;
-                if var.try_consume(context) {
-                    quote![#name]
+                if var.is_const {
+                    let name = &var.name;
+                    let expand_elem = frontend_type("ExpandElementTyped");
+                    quote![#expand_elem::from_lit(#name)]
                 } else {
-                    quote![#name.clone()]
+                    let name = &var.name;
+                    if var.try_consume(context) {
+                        quote![#name]
+                    } else {
+                        quote![#name.clone()]
+                    }
                 }
             }
-
             Expression::FieldAccess { base, field, .. } => {
                 let base = base
                     .as_const(context)
@@ -139,15 +153,16 @@ impl Expression {
                     }
                 }
             }
-            Expression::Index { expr, index } => {
+            Expression::Index { expr, index, span } => {
                 let expr = expr.to_tokens(context);
                 let index = index.to_tokens(context);
                 let index_fn = frontend_type("index");
+                let expand = with_span(*span, quote![#index_fn::expand(context, _array, _index)]);
                 quote! {
                     {
                         let _array = #expr;
                         let _index = #index;
-                        #index_fn::expand(context, _array, _index)
+                        #expand
                     }
                 }
             }
@@ -155,14 +170,17 @@ impl Expression {
                 func,
                 args,
                 associated_type: None,
+                span,
                 ..
             } => {
+                let debug_call = frontend_type("debug_call_expand");
                 let (args, arg_names) = map_args(args, context);
                 let (generics, path) = split_generics(func, context);
-                quote! {
+                let path_str = path.to_string();
+                quote_spanned! {*span=>
                     {
                         #(#args)*
-                        #path::expand #generics(context, #(#arg_names),*)
+                        #debug_call(context, #path_str, line!(), column!(), |context| #path::expand #generics(context, #(#arg_names),*))
                     }
                 }
             }
@@ -183,15 +201,18 @@ impl Expression {
             Expression::FunctionCall {
                 args,
                 associated_type: Some((ty_path, func)),
+                span,
                 ..
             } => {
+                let debug_call = frontend_type("debug_call_expand");
                 let (args, arg_names) = map_args(args, context);
                 let mut name = func.clone();
+                let name_str = format!("{}::{}", ty_path.to_token_stream(), name.to_token_stream());
                 name.ident = format_ident!("__expand_{}", name.ident);
-                quote! {
+                quote_spanned! {*span=>
                     {
                         #(#args)*
-                        #ty_path::#name(context, #(#arg_names),*)
+                        #debug_call(context, #name_str, line!(), column!(), |context| #ty_path::#name(context, #(#arg_names),*))
                     }
                 }
             }
@@ -200,17 +221,21 @@ impl Expression {
                 method,
                 generics,
                 args,
+                span,
                 ..
             } => {
+                let debug_call = frontend_type("debug_call_expand");
+                let method_str = method.to_string();
                 let method = format_ident!("__expand_{method}_method");
                 let receiver = receiver
                     .as_const(context)
                     .unwrap_or_else(|| receiver.to_tokens(context));
+                let call_str = format!("{receiver}.{method_str}");
                 let (args, arg_names) = map_args(args, context);
-                quote! {
+                quote_spanned! {*span=>
                     {
                         #(#args)*
-                        #receiver.#method #generics(context, #(#arg_names),*)
+                        #debug_call(context, #call_str, line!(), column!(), |context| #receiver.#method #generics(context, #(#arg_names),*))
                     }
                 }
             }
@@ -463,6 +488,10 @@ impl Expression {
                     }
                 }
             }
+            Expression::Comment { content } => {
+                let frontend_path = frontend_path();
+                quote![#frontend_path::cube_comment::expand(context, #content)]
+            }
         }
     }
 }
@@ -553,8 +582,13 @@ fn init_fields<'a>(
     fields.iter().map(|(pat, it)| {
         let init = frontend_type("Init");
         let it = if let Some(as_const) = it.as_const(context) {
-            let expand_elem = frontend_type("ExpandElementTyped");
-            quote_spanned![as_const.span()=> #expand_elem::from_lit(#as_const)]
+            let it = quote_spanned![as_const.span()=> #as_const];
+            return quote! {
+                #pat: {
+                    let _init = #it.clone();
+                    _init.into()
+                }
+            };
         } else {
             it.to_tokens(context)
         };
@@ -565,4 +599,11 @@ fn init_fields<'a>(
             }
         }
     })
+}
+
+fn with_span(span: Span, tokens: TokenStream) -> TokenStream {
+    let debug_spanned = frontend_type("spanned_expand");
+    quote_spanned! {span=>
+        #debug_spanned(context, line!(), column!(), |context| #tokens)
+    }
 }

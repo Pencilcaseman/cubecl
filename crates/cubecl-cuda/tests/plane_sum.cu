@@ -1,4 +1,3 @@
-#include <mma.h>
 typedef unsigned char uint8;
 typedef unsigned short uint16;
 typedef unsigned int uint;
@@ -15,8 +14,12 @@ extern "C" __global__ void kernel_sum(float output_0[], uint info[]) {
   float l_0_1;
   bool l_0_2;
   uint l_0_3;
+  bool l_0_4;
+  float l_0_5;
   l_0_3 = info[uint(0)];
-  l_0_0 = (threadIdxGlobal < l_0_3) ? output_0[threadIdxGlobal] : float(0);
+  l_0_4 = threadIdxGlobal < l_0_3;
+  l_0_5 = output_0[threadIdxGlobal];
+  l_0_0 = (l_0_4) ? l_0_5 : float(0.0);
 
   l_0_1 = l_0_0;
 

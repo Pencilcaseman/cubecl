@@ -23,7 +23,7 @@ impl<R: Runtime, E: Float> Benchmark for MatmulBench<R, E> {
         let client = R::client(&self.device);
         let out = TensorHandle::empty(&client, vec![self.b, self.m, self.n]);
 
-        matmul::launch::<R, E>(&self.strategy, &self.client, lhs, rhs, out);
+        matmul::launch::<R, E>(&self.strategy, &self.client, lhs, rhs, out).unwrap();
     }
 
     fn name(&self) -> String {
@@ -84,8 +84,6 @@ fn main() {
 
     #[cfg(feature = "wgpu-spirv")]
     {
-        use cubecl_linalg::matmul::kernels::cmma_old::PredefinedCmmaConfig;
-
         type R = cubecl::wgpu::WgpuRuntime<cubecl::wgpu::spirv::SpirvCompiler>;
 
         run::<R, half::f16>(
@@ -93,10 +91,6 @@ fn main() {
             matmul::Strategy::Tiling2D(Default::default()),
         );
         run::<R, half::f16>(Default::default(), matmul::Strategy::Accelerated);
-        run::<R, half::f16>(
-            Default::default(),
-            matmul::Strategy::CmmaOld(PredefinedCmmaConfig::M128K16.into()),
-        );
     }
 
     #[cfg(all(feature = "hip", target_os = "linux"))]
@@ -133,15 +127,12 @@ fn main() {
 
     #[cfg(feature = "cuda")]
     {
-        // run::<cubecl::cuda::CudaRuntime, half::f16>(
-        //     Default::default(),
-        //     matmul::Strategy::Tiling2D(Default::default()),
-        // );
-
-        // run::<cubecl::cuda::CudaRuntime, half::f16>(
-        //     Default::default(),
-        //     matmul::Strategy::CmmaOld(PredefinedCmmaConfig::M128K16.into()),
-        // );
+        run::<cubecl::cuda::CudaRuntime, f32>(
+            Default::default(),
+            matmul::Strategy::Tiling2D(Default::default()),
+        );
+        run::<cubecl::cuda::CudaRuntime, f32>(Default::default(), matmul::Strategy::Accelerated);
+        run::<cubecl::cuda::CudaRuntime, flex32>(Default::default(), matmul::Strategy::Accelerated);
         run::<cubecl::cuda::CudaRuntime, half::f16>(
             Default::default(),
             matmul::Strategy::Accelerated,

@@ -24,15 +24,21 @@ pub fn assign_mut_input(mut y: u32) -> u32 {
 }
 
 #[cube]
-pub fn assign_vectorized(y: u32) -> u32 {
-    let x = u32::vectorized(1, vectorization_of(&y));
-    x + y
-}
-
-#[cube]
 pub fn assign_deref(y: &mut u32) -> u32 {
     *y = 1;
     *y
+}
+
+#[derive(CubeType)]
+struct StructWithComptime {
+    index: u32,
+    #[cube(comptime)]
+    tag: String,
+}
+
+#[cube]
+fn new_struct(index: u32, #[comptime] tag: String) -> StructWithComptime {
+    StructWithComptime { index, tag }
 }
 
 mod tests {
@@ -77,18 +83,6 @@ mod tests {
         let scope = context.into_scope();
 
         assert_eq!(scope.operations, inline_macro_ref_assign_mut_input());
-    }
-
-    #[test]
-    fn cube_assign_vectorized_test() {
-        let mut context = CubeContext::default();
-
-        let y = context.create_local_binding(Item::vectorized(u32::as_elem(), NonZero::new(4)));
-
-        assign_vectorized::expand(&mut context, y.into());
-        let scope = context.into_scope();
-
-        assert_eq!(scope.operations, inline_macro_ref_assign_vectorized());
     }
 
     #[test]

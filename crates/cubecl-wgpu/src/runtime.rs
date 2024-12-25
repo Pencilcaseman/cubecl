@@ -9,13 +9,18 @@ use alloc::sync::Arc;
 use cubecl_common::future;
 use cubecl_core::{Feature, Runtime};
 pub use cubecl_runtime::memory_management::MemoryConfiguration;
-use cubecl_runtime::{channel::MutexComputeChannel, client::ComputeClient, ComputeRuntime};
+use cubecl_runtime::{
+    channel::MutexComputeChannel,
+    client::ComputeClient,
+    debug::{DebugLogger, ProfileLevel},
+    ComputeRuntime,
+};
 use cubecl_runtime::{memory_management::HardwareProperties, DeviceProperties};
 use cubecl_runtime::{
     memory_management::{MemoryDeviceProperties, MemoryManagement},
     storage::ComputeStorage,
 };
-use wgpu::RequestAdapterOptions;
+use wgpu::{InstanceFlags, RequestAdapterOptions};
 
 /// Runtime that uses the [wgpu] crate with the wgsl compiler. This is used in the Wgpu backend.
 /// For advanced configuration, use [`init_sync`] to pass in runtime options or to select a
@@ -50,7 +55,7 @@ impl Runtime for WgpuRuntime<WgslCompiler> {
     }
 
     fn supported_line_sizes() -> &'static [u8] {
-        &[4, 2]
+        &[4, 2, 1]
     }
 
     fn max_cube_count() -> (u32, u32, u32) {
@@ -109,8 +114,24 @@ pub struct WgpuSetup {
 
 /// Create a [`WgpuDevice`] on an existing [`WgpuSetup`].
 /// Useful when you want to share a device between CubeCL and other wgpu-dependent libraries.
+///
+/// # Note
+///
+/// Please **do not** to call on the same [`setup`](WgpuSetup) more than once.
+///
+/// This function generates a new, globally unique ID for the device every time it is called,
+/// even if called on the same device multiple times.
 pub fn init_device(setup: WgpuSetup, options: RuntimeOptions) -> WgpuDevice {
-    let device_id = WgpuDevice::Existing(setup.device.as_ref().global_id());
+    use core::sync::atomic::{AtomicU32, Ordering};
+
+    static COUNTER: AtomicU32 = AtomicU32::new(0);
+
+    let device_id = COUNTER.fetch_add(1, Ordering::Relaxed);
+    if device_id == u32::MAX {
+        core::panic!("Memory ID overflowed");
+    }
+
+    let device_id = WgpuDevice::Existing(device_id);
     let client = create_client_on_setup(setup, options);
     RUNTIME.register(&device_id, client);
     device_id
@@ -218,8 +239,16 @@ pub(crate) async fn create_setup_for_device<G: GraphicsApi, C: WgpuCompiler>(
 }
 
 async fn request_adapter<G: GraphicsApi>(device: &WgpuDevice) -> (wgpu::Instance, wgpu::Adapter) {
+    let debug = DebugLogger::default();
+    let instance_flags = match (debug.profile_level(), debug.is_activated()) {
+        (Some(ProfileLevel::Full), _) => InstanceFlags::advanced_debugging(),
+        (_, true) => InstanceFlags::debugging(),
+        (_, false) => InstanceFlags::default(),
+    };
+    log::debug!("{instance_flags:?}");
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: G::backend().into(),
+        flags: instance_flags,
         ..Default::default()
     });
 

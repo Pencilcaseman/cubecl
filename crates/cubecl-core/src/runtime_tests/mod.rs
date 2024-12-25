@@ -4,6 +4,7 @@ pub mod branch;
 pub mod cmma;
 pub mod const_match;
 pub mod constants;
+pub mod debug;
 pub mod different_rank;
 pub mod index;
 pub mod launch;
@@ -26,12 +27,7 @@ macro_rules! testgen_all {
         type IntType = i32;
         type UintType = u32;
 
-        cubecl_core::testgen_index!();
-        cubecl_core::testgen_assign!();
-        cubecl_core::testgen_branch!();
-        cubecl_core::testgen_const_match!();
-        cubecl_core::testgen_different_rank!();
-        cubecl_core::testgen_launch!();
+        $crate::testgen_float!();
 
         $crate::testgen_untyped!();
     };
@@ -74,6 +70,7 @@ macro_rules! testgen_float {
         cubecl_core::testgen_branch!();
         cubecl_core::testgen_const_match!();
         cubecl_core::testgen_different_rank!();
+        cubecl_core::testgen_index!();
         cubecl_core::testgen_launch!();
         cubecl_core::testgen_line!();
         cubecl_core::testgen_plane!();
@@ -107,6 +104,7 @@ macro_rules! testgen_untyped {
 
         cubecl_core::testgen_constants!();
         cubecl_core::testgen_tensor_indexing!();
+        cubecl_core::testgen_debug!();
     };
 }
 

@@ -1,6 +1,8 @@
 use std::fmt::Display;
 
-use super::{Branch, CoopMma, Item, Plane, Scope, Select, Synchronization, Variable};
+use super::{
+    Branch, Comment, CoopMma, DebugInfo, Item, Plane, Scope, Select, Synchronization, Variable,
+};
 use crate::{
     cpa,
     ir::{Elem, UIntKind},
@@ -26,6 +28,9 @@ pub enum Operation {
     Synchronization(Synchronization),
     Plane(Plane),
     CoopMma(CoopMma),
+    Comment(Comment),
+    /// Debug instructions, currently only for SPIR-V
+    Debug(DebugInfo),
 }
 
 /// An instruction that contains a right hand side [`Operation`] and an optional out variable.
@@ -106,6 +111,9 @@ impl Display for Operation {
             Operation::Plane(plane) => write!(f, "{plane}"),
             Operation::CoopMma(coop_mma) => write!(f, "{coop_mma}"),
             Operation::Copy(variable) => write!(f, "{variable}"),
+            Operation::Comment(comment) => write!(f, "{comment}"),
+            // Debug info has no semantic meaning
+            Operation::Debug(_) => Ok(()),
         }
     }
 }
@@ -362,33 +370,39 @@ pub struct FmaOperator {
 }
 
 #[allow(missing_docs)]
-pub struct CheckedIndexAssign {
-    pub lhs: Variable,
-    pub rhs: Variable,
-    pub out: Variable,
+pub fn expand_checked_index(scope: &mut Scope, lhs: Variable, rhs: Variable, out: Variable) {
+    let array_len = scope.create_local(Item::new(Elem::UInt(UIntKind::U32)));
+    let inside_bound = scope.create_local(Item::new(Elem::Bool));
+    let item = scope.create_local(out.item);
+    let zero: Variable = 0u32.into();
+
+    if lhs.has_buffer_length() {
+        cpa!(scope, array_len = buffer_len(lhs));
+    } else {
+        cpa!(scope, array_len = len(lhs));
+    }
+
+    cpa!(scope, inside_bound = rhs < array_len);
+
+    cpa!(scope, item = unchecked(lhs[rhs]));
+    cpa!(scope, out = select(inside_bound, item, zero));
 }
 
-impl CheckedIndexAssign {
-    #[allow(missing_docs)]
-    pub fn expand(self, scope: &mut Scope) {
-        let lhs = self.lhs;
-        let rhs = self.rhs;
-        let out = self.out;
-        let array_len = scope.create_local(Item::new(Elem::UInt(UIntKind::U32)));
-        let inside_bound = scope.create_local(Item::new(Elem::Bool));
+#[allow(missing_docs)]
+pub fn expand_checked_index_assign(scope: &mut Scope, lhs: Variable, rhs: Variable, out: Variable) {
+    let array_len = scope.create_local(Item::new(Elem::UInt(UIntKind::U32)));
+    let inside_bound = scope.create_local(Item::new(Elem::Bool));
 
-        if out.has_buffer_length() {
-            cpa!(scope, array_len = buffer_len(out));
-        } else {
-            cpa!(scope, array_len = len(out));
-        }
-
-        cpa!(scope, inside_bound = lhs < array_len);
-
-        cpa!(scope, if(inside_bound).then(|scope| {
-            cpa!(scope, unchecked(out[lhs]) = rhs);
-        }));
+    if out.has_buffer_length() {
+        cpa!(scope, array_len = buffer_len(out));
+    } else {
+        cpa!(scope, array_len = len(out));
     }
+
+    cpa!(scope, inside_bound = lhs < array_len);
+    cpa!(scope, if(inside_bound).then(|scope| {
+        cpa!(scope, unchecked(out[lhs]) = rhs);
+    }));
 }
 
 impl From<Operator> for Operation {
@@ -427,8 +441,38 @@ impl From<Synchronization> for Instruction {
     }
 }
 
+impl From<Comment> for Operation {
+    fn from(value: Comment) -> Self {
+        Self::Comment(value)
+    }
+}
+
+impl From<Comment> for Instruction {
+    fn from(value: Comment) -> Self {
+        Instruction {
+            out: None,
+            operation: value.into(),
+        }
+    }
+}
+
 impl From<Metadata> for Operation {
     fn from(val: Metadata) -> Self {
         Operation::Metadata(val)
+    }
+}
+
+impl From<DebugInfo> for Operation {
+    fn from(val: DebugInfo) -> Self {
+        Operation::Debug(val)
+    }
+}
+
+impl From<DebugInfo> for Instruction {
+    fn from(value: DebugInfo) -> Self {
+        Instruction {
+            out: None,
+            operation: value.into(),
+        }
     }
 }

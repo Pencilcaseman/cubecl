@@ -13,11 +13,7 @@ macro_rules! matmul_test_define {
     (
         $t_16x16x16:ident,
         $t_32x8x16:ident,
-        $t_8x32x16:ident,
-        $eg:ty,
-        $es:ty,
-        $ea:ty,
-        $plane_dim:expr
+        $t_8x32x16:ident
     ) => {
         #[test]
         pub fn bo4_gbp256x256x256_s4x4x2_t16x16x16_rr_ln4() {
@@ -34,35 +30,17 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
 
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::single_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S4x4x2,
-                >;
-                type GlobalMatmul = global::buffered::pipelined::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
-                    Self::StageMatmul,
-                >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::single_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S4x4x2>;
+                type GlobalMatmul = global::buffered::pipelined::Matmul<Spec, Self::StageMatmul>;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 4, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 4, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -78,7 +56,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -99,35 +77,17 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
 
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::single_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x2,
-                >;
-                type GlobalMatmul = global::buffered::pipelined::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
-                    Self::StageMatmul,
-                >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::single_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x2>;
+                type GlobalMatmul = global::buffered::pipelined::Matmul<Spec, Self::StageMatmul>;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -143,7 +103,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -164,35 +124,16 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::single_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x2,
-                >;
-                type GlobalMatmul = global::buffered::pipelined::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
-                    Self::StageMatmul,
-                >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::single_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x2>;
+                type GlobalMatmul = global::buffered::pipelined::Matmul<Spec, Self::StageMatmul>;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -208,7 +149,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -229,50 +170,34 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S4x4x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S4x4x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::TransposedDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::TransposedDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 4, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 4, 1)
                 }
                 fn cube_count(problem: &MatmulProblem) -> CubeCount {
                     let m_stage = S4x4x2::NUM_M * 16;
                     let n_stage = S4x4x2::NUM_N * 16;
-                    let cubes_needed_m = (problem.m as u32 + m_stage - 1) / m_stage;
-                    let cubes_needed_n = (problem.n as u32 + n_stage - 1) / n_stage;
+                    let cubes_needed_m = (problem.m as u32).div_ceil(m_stage);
+                    let cubes_needed_n = (problem.n as u32).div_ceil(n_stage);
 
                     use cubecl_linalg::matmul::components::batch::CubeCountDispatch;
                     batch::TransposedDispatch::cube_count(cubes_needed_m, cubes_needed_n, 1u32)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -293,37 +218,21 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -331,7 +240,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -352,35 +261,16 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::single_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x3,
-                >;
-                type GlobalMatmul = global::buffered::specialized::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
-                    Self::StageMatmul,
-                >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::single_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x3>;
+                type GlobalMatmul = global::buffered::specialized::Matmul<Spec, Self::StageMatmul>;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -396,7 +286,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -417,37 +307,21 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::TransposedDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::TransposedDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -455,7 +329,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -476,35 +350,16 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::single_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S4x4x2,
-                >;
-                type GlobalMatmul = global::buffered::specialized::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
-                    Self::StageMatmul,
-                >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::single_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S4x4x2>;
+                type GlobalMatmul = global::buffered::specialized::Matmul<Spec, Self::StageMatmul>;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 8, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 8, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(5, 5, 12)
@@ -519,7 +374,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -540,35 +395,16 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::single_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x2x2,
-                >;
-                type GlobalMatmul = global::buffered::specialized::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
-                    Self::StageMatmul,
-                >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::single_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x2x2>;
+                type GlobalMatmul = global::buffered::specialized::Matmul<Spec, Self::StageMatmul>;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -584,7 +420,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -605,35 +441,16 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::single_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S2x1x2,
-                >;
-                type GlobalMatmul = global::buffered::specialized::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
-                    Self::StageMatmul,
-                >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::single_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S2x1x2>;
+                type GlobalMatmul = global::buffered::specialized::Matmul<Spec, Self::StageMatmul>;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 3, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 3, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -649,7 +466,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -670,35 +487,16 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::single_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x2,
-                >;
-                type GlobalMatmul = global::buffered::specialized::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
-                    Self::StageMatmul,
-                >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::single_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x2>;
+                type GlobalMatmul = global::buffered::specialized::Matmul<Spec, Self::StageMatmul>;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -714,7 +512,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -735,35 +533,16 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::single_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x2,
-                >;
-                type GlobalMatmul = global::buffered::specialized::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
-                    Self::StageMatmul,
-                >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::single_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x2>;
+                type GlobalMatmul = global::buffered::specialized::Matmul<Spec, Self::StageMatmul>;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -779,7 +558,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -800,38 +579,25 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
                 type BatchMatmul = batch::one_to_many::Matmul<
-                    Self::EG,
-                    Self::ES,
+                    Spec,
                     Self::GlobalMatmul,
                     batch::RowMajorSpanMatmul,
                     batch::NaturalDispatch,
                 >;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -839,7 +605,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -860,38 +626,25 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
                 type BatchMatmul = batch::one_to_many::Matmul<
-                    Self::EG,
-                    Self::ES,
+                    Spec,
                     Self::GlobalMatmul,
                     batch::RowMajorSpanMatmul,
                     batch::NaturalDispatch,
                 >;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -899,7 +652,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -920,38 +673,25 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
                 type BatchMatmul = batch::one_to_many::Matmul<
-                    Self::EG,
-                    Self::ES,
+                    Spec,
                     Self::GlobalMatmul,
                     batch::RowMajorSpanMatmul,
                     batch::NaturalDispatch,
                 >;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -959,7 +699,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -980,38 +720,25 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
                 type BatchMatmul = batch::one_to_many::Matmul<
-                    Self::EG,
-                    Self::ES,
+                    Spec,
                     Self::GlobalMatmul,
                     batch::RowMajorSpanMatmul,
                     batch::NaturalDispatch,
                 >;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -1019,7 +746,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -1040,38 +767,25 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
                 type BatchMatmul = batch::one_to_many::Matmul<
-                    Self::EG,
-                    Self::ES,
+                    Spec,
                     Self::GlobalMatmul,
                     batch::RowMajorSpanMatmul,
                     batch::NaturalDispatch,
                 >;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -1079,7 +793,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -1100,38 +814,25 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
                 type BatchMatmul = batch::one_to_many::Matmul<
-                    Self::EG,
-                    Self::ES,
+                    Spec,
                     Self::GlobalMatmul,
                     batch::ColMajorSpanMatmul,
                     batch::NaturalDispatch,
                 >;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -1139,7 +840,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -1160,38 +861,25 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
                 type BatchMatmul = batch::one_to_many::Matmul<
-                    Self::EG,
-                    Self::ES,
+                    Spec,
                     Self::GlobalMatmul,
                     batch::SwizzleSpanMatmul<2>,
                     batch::NaturalDispatch,
                 >;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -1199,7 +887,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -1220,38 +908,25 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
                 type BatchMatmul = batch::one_to_many::Matmul<
-                    Self::EG,
-                    Self::ES,
+                    Spec,
                     Self::GlobalMatmul,
                     batch::SwizzleSpanMatmul<2>,
                     batch::TransposedDispatch,
                 >;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -1259,7 +934,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -1280,38 +955,25 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
                 type BatchMatmul = batch::one_to_many::Matmul<
-                    Self::EG,
-                    Self::ES,
+                    Spec,
                     Self::GlobalMatmul,
                     batch::SwizzleSpanMatmul<2>,
                     batch::SwizzleNaturalDispatch<2>,
                 >;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -1319,7 +981,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -1340,38 +1002,25 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
                 type BatchMatmul = batch::one_to_many::Matmul<
-                    Self::EG,
-                    Self::ES,
+                    Spec,
                     Self::GlobalMatmul,
                     batch::SwizzleSpanMatmul<2>,
                     batch::SwizzleTransposedDispatch<2>,
                 >;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -1379,7 +1028,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -1400,38 +1049,25 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
                 type BatchMatmul = batch::one_to_many::Matmul<
-                    Self::EG,
-                    Self::ES,
+                    Spec,
                     Self::GlobalMatmul,
                     batch::RowMajorSpanMatmul,
                     batch::NaturalDispatch,
                 >;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
 
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
@@ -1439,7 +1075,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -1460,44 +1096,28 @@ macro_rules! matmul_test_define {
             };
 
             struct Test {}
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S4x4x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S4x4x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 4, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 4, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(5, 5, 12)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -1518,44 +1138,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S4x4x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S4x4x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 4, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 4, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(2, 2, 12)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -1576,44 +1180,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S4x4x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S4x4x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 4, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 4, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(4, 4, 12)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -1634,44 +1222,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S4x4x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S4x4x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 4, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 4, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(4, 4, 3)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -1692,44 +1264,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 3)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -1750,51 +1306,35 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 3)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
         }
 
         #[test]
-        pub fn bo_gfl256x256x256_s4x4x2_t16x16x16_rc_ln4_ColMajor() {
+        pub fn bo_gfl256x256x256_s4x4x2_t16x16x16_rc_ln4_col_major() {
             let problem = MatmulProblem {
                 m: 256,
                 n: 256,
@@ -1808,37 +1348,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S4x4x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S4x4x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 4, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 4, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(4, 4, 1)
@@ -1853,14 +1377,14 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
         }
 
         #[test]
-        pub fn bo_gfl32x32x32_s1x1x1_t16x16x16_cc_ln4_ColMajor() {
+        pub fn bo_gfl32x32x32_s1x1x1_t16x16x16_cc_ln4_col_major() {
             let problem = MatmulProblem {
                 m: 32,
                 n: 32,
@@ -1874,37 +1398,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(2, 2, 1)
@@ -1919,14 +1427,14 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
         }
 
         #[test]
-        pub fn bo_gfl32x32x32_s1x1x1_t16x16x16_R() {
+        pub fn bo_gfl32x32x32_s1x1x1_t16x16x16_rr_ln4() {
             let problem = MatmulProblem {
                 m: 32,
                 n: 32,
@@ -1940,44 +1448,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(2, 2, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -1998,44 +1490,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2056,44 +1532,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2114,44 +1574,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2172,44 +1616,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S4x4x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S4x4x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 4, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 4, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2230,44 +1658,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2288,44 +1700,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2346,44 +1742,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2404,44 +1784,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2462,44 +1826,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2520,44 +1868,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2578,44 +1910,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2636,44 +1952,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2694,37 +1994,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
@@ -2738,7 +2022,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2759,37 +2043,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
@@ -2803,7 +2071,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2824,37 +2092,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
@@ -2868,7 +2120,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2889,37 +2141,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_32x8x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_32x8x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
@@ -2933,7 +2169,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -2954,37 +2190,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_32x8x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_32x8x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
@@ -2998,7 +2218,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3019,37 +2239,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_32x8x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_32x8x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
@@ -3063,7 +2267,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3084,37 +2288,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_32x8x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_32x8x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
@@ -3128,7 +2316,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3149,37 +2337,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_8x32x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_8x32x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
@@ -3193,7 +2365,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3214,37 +2386,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_8x32x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_8x32x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
@@ -3258,7 +2414,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3279,37 +2435,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_8x32x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_8x32x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
@@ -3323,7 +2463,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3344,37 +2484,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_8x32x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_8x32x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
@@ -3388,7 +2512,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3409,37 +2533,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S4x4x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S4x4x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 4, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 4, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(4, 4, 12)
@@ -3456,7 +2564,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3477,44 +2585,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3535,44 +2627,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_32x8x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_32x8x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3593,44 +2669,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_32x8x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_32x8x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3651,44 +2711,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_32x8x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_32x8x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3709,44 +2753,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_32x8x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_32x8x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3767,44 +2795,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_8x32x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_8x32x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3825,44 +2837,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_8x32x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_8x32x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3883,44 +2879,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_8x32x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_8x32x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3941,44 +2921,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_8x32x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_8x32x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -3999,51 +2963,35 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
         }
 
         #[test]
-        pub fn bo_gfl32x32x32_s2x2x2_t16x16x16_rr_ln4_ColMajor() {
+        pub fn bo_gfl32x32x32_s2x2x2_t16x16x16_rr_ln4_col_major() {
             let problem = MatmulProblem {
                 m: 32,
                 n: 32,
@@ -4057,37 +3005,21 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S2x2x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S2x2x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
@@ -4102,7 +3034,7 @@ macro_rules! matmul_test_define {
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4123,44 +3055,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4181,44 +3097,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4239,44 +3139,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4297,44 +3181,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S2x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S2x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4355,44 +3223,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S2x2x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S2x2x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4413,44 +3265,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x2x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x2x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4471,44 +3307,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S2x2x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S2x2x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4529,44 +3349,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S2x2x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S2x2x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4587,44 +3391,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S2x2x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S2x2x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4645,44 +3433,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S2x2x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S2x2x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4703,44 +3475,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S2x2x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S2x2x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4761,44 +3517,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S2x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S2x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4819,44 +3559,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_32x8x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S1x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_32x8x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S1x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 1, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 1, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4877,44 +3601,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S8x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S8x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 8, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 8, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4935,44 +3643,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S4x4x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S4x4x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 4, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 4, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -4993,44 +3685,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S4x4x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S4x4x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 4, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 4, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -5051,44 +3727,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S2x1x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S2x1x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::TilewiseLoading,
                     global::full_load::CyclicLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -5109,44 +3769,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S2x1x2,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S2x1x2>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::CyclicLoading,
                     global::full_load::TilewiseLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 2, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 2, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
@@ -5167,44 +3811,28 @@ macro_rules! matmul_test_define {
             };
             struct Test {}
 
-            impl matmul::Algorithm<$eg> for Test {
-                const PLANE_DIM: u32 = $plane_dim;
-                type EG = $eg;
-                type ES = $es;
-                type EA = $ea;
-
-                type TileMatmul = $t_16x16x16<Self::ES, Self::EA>;
-                type StageMatmul = stage::multi_buffer::Matmul<
-                    Self::ES,
-                    Self::EG,
-                    Self::EA,
-                    Self::TileMatmul,
-                    S4x4x1,
-                >;
+            impl matmul::Algorithm<Spec> for Test {
+                type TileMatmul = $t_16x16x16<ES, EA>;
+                type StageMatmul =
+                    stage::multi_buffer::Matmul<ES, EG, EA, Self::TileMatmul, S4x4x1>;
                 type GlobalMatmul = global::full_load::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::EA,
+                    Spec,
                     Self::StageMatmul,
                     global::full_load::TilewiseLoading,
                     global::full_load::TilewiseLoading,
                 >;
-                type BatchMatmul = batch::one_to_one::Matmul<
-                    Self::EG,
-                    Self::ES,
-                    Self::GlobalMatmul,
-                    batch::NaturalDispatch,
-                >;
+                type BatchMatmul =
+                    batch::one_to_one::Matmul<Spec, Self::GlobalMatmul, batch::NaturalDispatch>;
 
                 fn cube_dim() -> CubeDim {
-                    CubeDim::new($plane_dim, 4, 1)
+                    CubeDim::new(Spec::PLANE_DIM, 4, 1)
                 }
                 fn cube_count(_problem: &MatmulProblem) -> CubeCount {
                     CubeCount::Static(1, 1, 1)
                 }
             }
 
-            test_matmul_algorithm::<Test, $eg, $es, TestRuntime>(
+            test_matmul_algorithm::<Test, EG, ES, TestRuntime>(
                 problem,
                 &<<TestRuntime as Runtime>::Device>::default(),
             );
