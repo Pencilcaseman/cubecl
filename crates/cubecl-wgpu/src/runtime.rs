@@ -228,7 +228,7 @@ pub(crate) fn create_client_on_setup(
     ComputeClient::new(channel, device_props)
 }
 
-/// Select the wgpu device and queue based on the provided [device](WgpuDevice).
+/// Select the wgpu device and queue based on the provided [device](WgpuDevice)
 pub(crate) async fn create_setup_for_device<G: GraphicsApi>(device: &WgpuDevice) -> WgpuSetup {
     let (instance, adapter) = request_adapter::<G>(device).await;
     let (device, queue) = backend::request_device(&adapter).await;
