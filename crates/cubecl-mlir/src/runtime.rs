@@ -1,10 +1,16 @@
 use cubecl_core::{
     channel::{ComputeChannel, MutexComputeChannel},
     ir::{Elem, FloatKind},
-    AtomicFeature, DeviceId, Feature, Runtime,
+    prelude::ComputeClient,
+    AtomicFeature, DeviceId, Feature, MemoryConfiguration, Runtime,
+};
+use cubecl_runtime::{
+    memory_management::{HardwareProperties, MemoryDeviceProperties},
+    storage::ComputeStorage,
+    ComputeRuntime, DeviceProperties,
 };
 
-use crate::compiler::MlirCompiler;
+use crate::{compiler::MlirCompiler, storage::MlirStorage};
 
 #[derive(Debug)]
 pub struct MlirRuntime;
@@ -22,6 +28,12 @@ impl Default for MlirDevice {
     }
 }
 
+static MLIR_RUNTIME: ComputeRuntime<
+    MlirDevice,
+    MlirServer,
+    MutexComputeChannel<MlirServer>,
+> = ComputeRuntime::new();
+
 impl Runtime for MlirRuntime {
     type Compiler = MlirCompiler;
 
@@ -37,8 +49,32 @@ impl Runtime for MlirRuntime {
 
     fn client(
         device: &Self::Device,
-    ) -> cubecl_core::prelude::ComputeClient<Self::Server, Self::Channel> {
-        todo!()
+    ) -> ComputeClient<Self::Server, Self::Channel> {
+        MLIR_RUNTIME.client(device, move || {
+            let mem_props = MemoryDeviceProperties {
+                max_page_size: 4096,
+                alignment: MlirStorage::ALIGNMENT,
+            };
+
+            let hardware_props = HardwareProperties {
+                plane_size_min: 0,
+                plane_size_max: 0,
+                max_bindings: 1024,
+                max_shared_memory_size: 4096,
+            };
+
+            let device_props =
+                DeviceProperties::new(&[], mem_props.clone(), hardware_props);
+
+            let server = MlirServer::new(
+                mem_props,
+                MemoryConfiguration::default(),
+                Default::default(),
+            );
+            let channel = MutexComputeChannel::new(server);
+
+            ComputeClient::new(channel, device_props)
+        })
     }
 
     fn name() -> &'static str {

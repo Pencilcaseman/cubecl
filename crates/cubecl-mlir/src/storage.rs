@@ -5,6 +5,7 @@ use cubecl_runtime::storage::{
 };
 use derive_new::new;
 
+#[derive(new, Debug)]
 pub struct MlirStorage;
 
 #[derive(new, Debug)]

@@ -1,18 +1,42 @@
 use std::future::Future;
 
 use cubecl_common::future;
-use cubecl_core::{prelude::CubeTask, Feature};
+use cubecl_core::{
+    prelude::CubeTask, server::Handle, Feature, MemoryConfiguration,
+};
 use cubecl_runtime::{
+    memory_management::{MemoryDeviceProperties, MemoryManagement},
     server::{self, ComputeServer},
     storage::BindingResource,
     TimestampsError, TimestampsResult,
 };
 use derive_new::new;
 
-use crate::{compiler::MlirCompiler, storage::MlirStorage};
+use crate::{
+    compiler::{MlirCompilationOptions, MlirCompiler},
+    storage::MlirStorage,
+};
 
-#[derive(new, Debug)]
-pub struct MlirServer;
+#[derive(Debug)]
+pub struct MlirServer {
+    mem: MemoryManagement<MlirStorage>,
+}
+
+impl MlirServer {
+    pub fn new(
+        memory_properties: MemoryDeviceProperties,
+        memory_config: MemoryConfiguration,
+        compilation_options: MlirCompilationOptions,
+    ) -> Self {
+        Self {
+            mem: MemoryManagement::from_configuration(
+                MlirStorage::new(),
+                &memory_properties,
+                memory_config,
+            ),
+        }
+    }
+}
 
 impl ComputeServer for MlirServer {
     type Kernel = Box<dyn CubeTask<MlirCompiler>>;
@@ -40,7 +64,8 @@ impl ComputeServer for MlirServer {
     }
 
     fn empty(&mut self, size: usize) -> server::Handle {
-        todo!()
+        let slice_handle = self.mem.reserve(size as u64);
+        Handle::new(slice_handle, None, None, size as u64)
     }
 
     unsafe fn execute(
