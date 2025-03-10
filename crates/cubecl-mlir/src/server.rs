@@ -5,7 +5,9 @@ use cubecl_core::{
     prelude::CubeTask, server::Handle, Feature, MemoryConfiguration,
 };
 use cubecl_runtime::{
-    memory_management::{MemoryDeviceProperties, MemoryManagement},
+    memory_management::{
+        MemoryDeviceProperties, MemoryHandle, MemoryManagement,
+    },
     server::{self, ComputeServer},
     storage::BindingResource,
     TimestampsError, TimestampsResult,
@@ -60,7 +62,15 @@ impl ComputeServer for MlirServer {
     }
 
     fn create(&mut self, data: &[u8]) -> server::Handle {
-        todo!()
+        let size = data.len() as u64;
+
+        let slice_handle = self.mem.reserve(size);
+        let resource = self
+            .mem
+            .get_resource(slice_handle.clone().binding(), None, None)
+            .expect("Unable to acquire resource. Maybe allocation failed?");
+
+        Handle::new(slice_handle, None, None, size)
     }
 
     fn empty(&mut self, size: usize) -> server::Handle {
@@ -73,8 +83,19 @@ impl ComputeServer for MlirServer {
         kernel: Self::Kernel,
         count: server::CubeCount,
         bindings: Vec<server::Binding>,
-        kind: cubecl_core::ExecutionMode,
+        mode: cubecl_core::ExecutionMode,
     ) {
+        println!("I have no idea what I'm doing at this point...");
+
+        println!("Kernel Name: {}", kernel.name());
+
+        // kernel.compile()
+
+        // println!("Kernel: {kernel:?}");
+        println!("Count: {count:?}");
+        println!("Bindings: {bindings:?}");
+        println!("Mode: {mode:?}");
+
         todo!()
     }
 

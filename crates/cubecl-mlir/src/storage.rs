@@ -89,7 +89,15 @@ impl ComputeStorage for MlirStorage {
     const ALIGNMENT: u64 = 64;
 
     fn get(&mut self, handle: &StorageHandle) -> Self::Resource {
-        todo!()
+        let buf = self
+            .memory
+            .get(&handle.id)
+            .expect("Requested memory handle does not exist");
+        MlirResource {
+            ptr: buf.clone(),
+            offset: handle.offset(),
+            size: handle.size(),
+        }
     }
 
     fn alloc(&mut self, size: u64) -> StorageHandle {
