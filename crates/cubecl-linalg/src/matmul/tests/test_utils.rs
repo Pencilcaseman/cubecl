@@ -12,7 +12,7 @@ pub use cubecl_std::Q8;
 
 use crate::{
     matmul::{
-        components::{Ident, MatmulProblem, MatmulSelection, MatrixLayout},
+        components::{Ident, MatmulProblem, MatrixLayout},
         kernels::matmul::Algorithm,
         tests::cmma_matmul::matmul_test_launcher::strides,
     },
@@ -43,9 +43,7 @@ pub trait TestPrecision {
     // TODO: This is a temporary hack to not run some quantized matmul test during development.
     //       This avoids breaking the CI with incomplete implementations.
     //       Remove when quantization is fully supported.
-    fn should_run<A: Algorithm<Selection = MatmulSelection>>(
-        layouts: (MatrixLayout, MatrixLayout),
-    ) -> bool;
+    fn should_run<A: Algorithm>(layouts: (MatrixLayout, MatrixLayout)) -> bool;
 }
 
 impl<EG, ES> TestPrecision for (EG, ES)
@@ -95,9 +93,7 @@ where
         }
     }
 
-    fn should_run<A: Algorithm<Selection = MatmulSelection>>(
-        _layouts: (MatrixLayout, MatrixLayout),
-    ) -> bool {
+    fn should_run<A: Algorithm>(_layouts: (MatrixLayout, MatrixLayout)) -> bool {
         true
     }
 }
@@ -115,11 +111,9 @@ pub(crate) fn assert_equals_approx<R: Runtime, F: Float + CubeElement + Display>
     // normalize to type epsilon
     let epsilon = (epsilon / f32::EPSILON * F::EPSILON.to_f32().unwrap()).max(epsilon);
 
-    // println!("{:?}", expected.len());
     for (i, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
         // account for lower precision at higher values
         let allowed_error = (epsilon * e.to_f32().unwrap()).max(epsilon);
-        // println!("Index={:?} Actual={:?} Expected={:?}", i, a, e);
 
         if f32::abs(a.to_f32().unwrap() - e.to_f32().unwrap()) >= allowed_error {
             return Err(format!(
@@ -197,9 +191,7 @@ impl TestPrecision for Q8 {
         assert_eq!(out, expected);
     }
 
-    fn should_run<A: Algorithm<Selection = MatmulSelection>>(
-        _layouts: (MatrixLayout, MatrixLayout),
-    ) -> bool {
+    fn should_run<A: Algorithm>(_layouts: (MatrixLayout, MatrixLayout)) -> bool {
         false
     }
 }

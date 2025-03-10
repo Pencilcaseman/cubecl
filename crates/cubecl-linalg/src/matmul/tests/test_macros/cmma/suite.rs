@@ -5,7 +5,7 @@ use crate::matmul::tests::cmma_matmul::matmul_test_launcher::test_matmul_algorit
 use crate::matmul::tests::test_utils::TestPrecision;
 use cubecl_core::Runtime;
 
-pub fn test_algo<A: Algorithm<Selection = MatmulSelection>, P: TestPrecision, R: Runtime>(
+pub fn test_algo<A: Algorithm, P: TestPrecision, R: Runtime>(
     layouts: (MatrixLayout, MatrixLayout),
     tile_shape: MatmulSize,
     tile_count: MatmulSize,
@@ -289,8 +289,15 @@ macro_rules! matmul_standard_tests {
     };
 
     ($lhs_layout:ident, $rhs_layout:ident, $tile:expr, $stage:expr, $problem:expr) => {
+        use $crate::matmul::components::global::loader::r#async::{
+            CyclicWindowLoading, MaximizeSliceLengthLoading, MaximizeUnitCountLoading,
+            WindowCooperativeLoading,
+        };
+        use $crate::matmul::components::global::loader::sync::StridedCoalescedLoading;
+        use $crate::matmul::components::stage::ColMajorTilingOrder;
         use $crate::matmul::kernels::matmul::double_buffering::DoubleBufferingAlgorithm;
         use $crate::matmul::kernels::matmul::simple::SimpleAlgorithm;
+        use $crate::matmul::kernels::matmul::simple_barrier::SimpleBarrierAlgorithm;
         use $crate::matmul::kernels::matmul::simple_pipelined::SimplePipelinedAlgorithm;
         use $crate::matmul::kernels::matmul::specialized::SpecializedAlgorithm;
 
@@ -305,9 +312,79 @@ macro_rules! matmul_standard_tests {
         }
 
         #[test]
+        pub fn simple_strided() {
+            cubecl_linalg::matmul::tests::test_algo::<
+                SimpleAlgorithm<TMM, StridedCoalescedLoading, StridedCoalescedLoading>,
+                Precision,
+                TestRuntime,
+            >(
+                (MatrixLayout::$lhs_layout, MatrixLayout::$rhs_layout),
+                $tile,
+                $stage,
+                $problem,
+            );
+        }
+
+        #[test]
         pub fn simple_pipelined() {
             cubecl_linalg::matmul::tests::test_algo::<
                 SimplePipelinedAlgorithm<TMM>,
+                Precision,
+                TestRuntime,
+            >(
+                (MatrixLayout::$lhs_layout, MatrixLayout::$rhs_layout),
+                $tile,
+                $stage,
+                $problem,
+            );
+        }
+
+        #[test]
+        pub fn simple_barrier_cooperative() {
+            cubecl_linalg::matmul::tests::test_algo::<
+                SimpleBarrierAlgorithm<TMM, WindowCooperativeLoading>,
+                Precision,
+                TestRuntime,
+            >(
+                (MatrixLayout::$lhs_layout, MatrixLayout::$rhs_layout),
+                $tile,
+                $stage,
+                $problem,
+            );
+        }
+
+        #[test]
+        pub fn simple_barrier_cyclic() {
+            cubecl_linalg::matmul::tests::test_algo::<
+                SimpleBarrierAlgorithm<TMM, CyclicWindowLoading<ColMajorTilingOrder>>,
+                Precision,
+                TestRuntime,
+            >(
+                (MatrixLayout::$lhs_layout, MatrixLayout::$rhs_layout),
+                $tile,
+                $stage,
+                $problem,
+            );
+        }
+
+        #[test]
+        pub fn simple_barrier_maximize_slice_length() {
+            cubecl_linalg::matmul::tests::test_algo::<
+                SimpleBarrierAlgorithm<TMM, MaximizeSliceLengthLoading>,
+                Precision,
+                TestRuntime,
+            >(
+                (MatrixLayout::$lhs_layout, MatrixLayout::$rhs_layout),
+                $tile,
+                $stage,
+                $problem,
+            );
+        }
+
+        #[test]
+        pub fn simple_barrier_maximize_unit_count() {
+            cubecl_linalg::matmul::tests::test_algo::<
+                SimpleBarrierAlgorithm<TMM, MaximizeUnitCountLoading>,
                 Precision,
                 TestRuntime,
             >(

@@ -1,4 +1,4 @@
-//! This module exposes pipeling utilities for multi-stage asynchronous data copies
+//! This module exposes pipelining utilities for multi-stage asynchronous data copies
 //! with latency hiding.
 //! We call producers all threads that call producer_acquire and producer_commit,
 //! and consumers threads that call consumer_wait and consumer_release.
@@ -135,7 +135,7 @@ impl<C: CubePrimitive> Pipeline<C> {
     ///
     /// This will try to copy the whole source slice, so
     /// make sure source length <= destination length
-    pub fn memcpy_async(&self, _source: Slice<Line<C>>, _destination: SliceMut<Line<C>>) {
+    pub fn memcpy_async(&self, _source: &Slice<Line<C>>, _destination: &mut SliceMut<Line<C>>) {
         unexpanded!()
     }
 

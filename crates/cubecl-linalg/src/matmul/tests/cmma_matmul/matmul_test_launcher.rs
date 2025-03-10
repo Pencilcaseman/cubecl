@@ -8,6 +8,7 @@ use crate::matmul::components::Ident;
 use crate::matmul::components::MatmulConfigFactory;
 use crate::matmul::components::MatmulLaunch;
 use crate::matmul::components::MatmulProblem;
+use crate::matmul::components::MatmulSelection;
 use crate::matmul::components::MatrixLayout;
 use crate::matmul::components::SingleMatmulSpec;
 use crate::matmul::kernels::matmul::Algorithm;
@@ -27,7 +28,7 @@ pub fn test_matmul_algorithm<A, P, R>(
     client: ComputeClient<R::Server, R::Channel>,
     mut problem: MatmulProblem,
     input: <A::BatchMatmul as MatmulConfigFactory>::Input,
-    selection: A::Selection,
+    selection: MatmulSelection,
 ) where
     A: Algorithm,
     P: TestPrecision,
@@ -68,14 +69,7 @@ pub fn test_matmul_algorithm<A, P, R>(
 
     let cube_dim = A::cube_dim(&selection);
     let cube_count = A::cube_count(&selection, &problem);
-    let config = match A::make_config(
-        input,
-        &problem,
-        &cube_dim,
-        &cube_count,
-        &A::advanced_config(),
-        P::QUANTIZED,
-    ) {
+    let config = match A::make_config(input, &problem, &cube_dim, &cube_count, P::QUANTIZED) {
         Ok(config) => config,
         Err(err) => {
             let msg = format!("Can't launch the test: {:?}", err);

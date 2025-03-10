@@ -4,11 +4,22 @@ use cubecl_std::MaybeQuantized;
 use crate::tensor::TensorHandle;
 
 use super::{
-    components::tile::accelerated::Accelerated,
+    components::{
+        global::loader::{
+            r#async::{
+                CyclicWindowLoading, MaximizeSliceLengthLoading, MaximizeUnitCountLoading,
+                WindowCooperativeLoading,
+            },
+            sync::StridedCoalescedLoading,
+        },
+        stage::ColMajorTilingOrder,
+        tile::accelerated::Accelerated,
+    },
     kernels::{
         matmul::{
-            self, DoubleBufferingSelector, SimplePipelinedSelector, SimpleSelector,
-            SpecializedSelector,
+            self, double_buffering::DoubleBufferingAlgorithm, simple::SimpleAlgorithm,
+            simple_barrier::SimpleBarrierAlgorithm, simple_pipelined::SimplePipelinedAlgorithm,
+            specialized::SpecializedAlgorithm,
         },
         naive,
         tiling2d::{self, Tiling2dConfig},
@@ -18,7 +29,8 @@ use super::{
 
 #[derive(Debug, Clone, Default)]
 pub enum Strategy {
-    Simple,
+    Simple(SyncLoadingStrategy),
+    SimpleBarrier(AsyncLoadingStrategy),
     SimplePipelined,
     DoubleBuffering,
     Specialized,
@@ -29,6 +41,20 @@ pub enum Strategy {
     Tiling2D(Tiling2dConfig),
     #[default]
     Auto,
+}
+
+#[derive(Debug, Clone)]
+pub enum SyncLoadingStrategy {
+    Cyclic,
+    Strided,
+}
+
+#[derive(Debug, Clone)]
+pub enum AsyncLoadingStrategy {
+    Cooperative,
+    Cyclic,
+    MaximizeSliceLength,
+    MaximizeUnitCount,
 }
 
 pub fn launch<R: Runtime, EG: MaybeQuantized>(
@@ -55,21 +81,54 @@ pub fn launch_ref<R: Runtime, EG: MaybeQuantized>(
     out: &TensorHandleRef<R>,
 ) -> Result<(), MatmulLaunchError> {
     match strategy {
-        Strategy::Simple => {
-            matmul::launch_ref::<R, EG, SimpleSelector<Accelerated>>(client, lhs, rhs, out)
-        }
+        Strategy::Simple(loading_strategy) => match loading_strategy {
+            SyncLoadingStrategy::Cyclic => {
+                matmul::launch_ref::<R, EG, SimpleAlgorithm<Accelerated>>(client, lhs, rhs, out)
+            }
+            SyncLoadingStrategy::Strided => matmul::launch_ref::<
+                R,
+                EG,
+                SimpleAlgorithm<Accelerated, StridedCoalescedLoading, StridedCoalescedLoading>,
+            >(client, lhs, rhs, out),
+        },
+        Strategy::SimpleBarrier(loading_strategy) => match loading_strategy {
+            AsyncLoadingStrategy::Cooperative => matmul::launch_ref::<
+                R,
+                EG,
+                SimpleBarrierAlgorithm<Accelerated, WindowCooperativeLoading>,
+            >(client, lhs, rhs, out),
+            AsyncLoadingStrategy::Cyclic => matmul::launch_ref::<
+                R,
+                EG,
+                SimpleBarrierAlgorithm<Accelerated, CyclicWindowLoading<ColMajorTilingOrder>>,
+            >(client, lhs, rhs, out),
+            AsyncLoadingStrategy::MaximizeSliceLength => matmul::launch_ref::<
+                R,
+                EG,
+                SimpleBarrierAlgorithm<Accelerated, MaximizeSliceLengthLoading>,
+            >(client, lhs, rhs, out),
+            AsyncLoadingStrategy::MaximizeUnitCount => matmul::launch_ref::<
+                R,
+                EG,
+                SimpleBarrierAlgorithm<Accelerated, MaximizeUnitCountLoading>,
+            >(client, lhs, rhs, out),
+        },
         Strategy::SimplePipelined => {
-            matmul::launch_ref::<R, EG, SimplePipelinedSelector<Accelerated>>(client, lhs, rhs, out)
+            matmul::launch_ref::<R, EG, SimplePipelinedAlgorithm<Accelerated>>(
+                client, lhs, rhs, out,
+            )
         }
         Strategy::DoubleBuffering => {
-            matmul::launch_ref::<R, EG, DoubleBufferingSelector<Accelerated>>(client, lhs, rhs, out)
+            matmul::launch_ref::<R, EG, DoubleBufferingAlgorithm<Accelerated>>(
+                client, lhs, rhs, out,
+            )
         }
         Strategy::Specialized => {
-            matmul::launch_ref::<R, EG, SpecializedSelector<Accelerated>>(client, lhs, rhs, out)
+            matmul::launch_ref::<R, EG, SpecializedAlgorithm<Accelerated>>(client, lhs, rhs, out)
         }
         #[cfg(any(test, feature = "export_tests"))]
         Strategy::PlaneMma => {
-            matmul::launch_ref::<R, EG, SimpleSelector<super::components::tile::plane::PlaneMma>>(
+            matmul::launch_ref::<R, EG, SimpleAlgorithm<super::components::tile::plane::PlaneMma>>(
                 client, lhs, rhs, out,
             )
         }
@@ -83,7 +142,7 @@ pub fn launch_ref<R: Runtime, EG: MaybeQuantized>(
         }
         Strategy::Auto => {
             if let Err(err) =
-                matmul::launch_ref::<R, EG, SimpleSelector<Accelerated>>(client, lhs, rhs, out)
+                matmul::launch_ref::<R, EG, SimpleAlgorithm<Accelerated>>(client, lhs, rhs, out)
             {
                 match err {
                     super::kernels::MatmulLaunchError::Unavailable(_) => {

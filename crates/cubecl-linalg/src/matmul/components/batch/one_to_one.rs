@@ -3,18 +3,17 @@ use std::marker::PhantomData;
 use crate::matmul::components::batch::shared::gmm_execute;
 use crate::matmul::components::global::{GlobalMatmul, GlobalMatmulFamily};
 use crate::matmul::components::{
-    batch, config::MatmulConfig, global, Ident, MatmulConfigFactory, MatmulLaunch, StageTiling,
+    batch, config::MatmulConfig, global, Ident, MatmulConfigFactory, MatmulLaunch, TilingDimensions,
 };
 use crate::matmul::components::{
     InputRuntimeArg, InvalidConfigError, MatmulPrecision, MatmulProblem, MatmulSpec,
     OutputRuntimeArg,
 };
-use crate::matmul::kernels::matmul::AdvancedConfig;
 use crate::matmul::kernels::MatmulAvailabilityError;
-use crate::tensor::{ReadWrite, VirtualTensor};
 use batch::{BatchMatmul, BatchMatmulFamily};
 use cubecl_core as cubecl;
 use cubecl_core::prelude::*;
+use cubecl_std::tensor::r#virtual::{ReadWrite, VirtualTensor};
 
 use super::{BatchConfig as _, CubeDispatch};
 
@@ -49,17 +48,9 @@ impl<GMM: GlobalMatmulFamily, C: CubeDispatch> MatmulConfigFactory
         problem: &MatmulProblem,
         cube_dim: &CubeDim,
         cube_count: &CubeCount,
-        advanced_config: &AdvancedConfig,
         quantized: bool,
     ) -> Self::Config {
-        let gmm_config = GMM::make_config(
-            input,
-            problem,
-            cube_dim,
-            cube_count,
-            advanced_config,
-            quantized,
-        );
+        let gmm_config = GMM::make_config(input, problem, cube_dim, cube_count, quantized);
         let cube_count = if let CubeCount::Static(x, y, z) = cube_count {
             (*x, *y, *z)
         } else {
@@ -109,8 +100,8 @@ impl<MP: MatmulPrecision, GMM: GlobalMatmul<MP>, C: CubeDispatch> BatchMatmul<MP
         #[comptime] config: Self::Config,
     ) {
         let (x_index, y_index) = C::x_y_indices();
-        let x_offset = x_index * config.stage_tiling(Ident::Lhs).total_row();
-        let y_offset = y_index * config.stage_tiling(Ident::Rhs).total_col();
+        let x_offset = x_index * config.tiling_dimensions(Ident::Lhs).total_row();
+        let y_offset = y_index * config.tiling_dimensions(Ident::Rhs).total_col();
         let nth_batch = C::batch_index();
         let rank = lhs.rank();
         let k_range = (0, lhs.shape(rank - 1));
@@ -146,16 +137,16 @@ impl<G: global::GlobalConfig, C: CubeDispatch> batch::BatchConfig for Config<G, 
         self.gmm_config
     }
 
-    fn stage_tiling(&self, ident: Ident) -> StageTiling {
-        self.gmm_config.stage_tiling(ident)
+    fn tiling_dimensions(&self, ident: Ident) -> TilingDimensions {
+        self.gmm_config.tiling_dimensions(ident)
     }
 
     fn max_m(&self) -> u32 {
-        C::max_x(self.cube_count) * self.stage_tiling(Ident::Out).total_row()
+        C::max_x(self.cube_count) * self.tiling_dimensions(Ident::Out).total_row()
     }
 
     fn max_n(&self) -> u32 {
-        C::max_y(self.cube_count) * self.stage_tiling(Ident::Out).total_col()
+        C::max_y(self.cube_count) * self.tiling_dimensions(Ident::Out).total_col()
     }
 
     fn max_batches(&self) -> u32 {

@@ -25,7 +25,6 @@ where
         global::multi_stage::double_buffering::DoubleBufferingMatmulFamily<Self::StageMatmul>;
 
     type BatchMatmul = batch::one_to_one::OneToOneMatmulFamily<Self::GlobalMatmul, Dispatch>;
-    type Selection = MatmulSelection;
 
     fn cube_dim(selection: &MatmulSelection) -> CubeDim {
         CubeDim::new(selection.plane_dim, selection.tile_count.m, 1)
@@ -38,13 +37,5 @@ where
         let cubes_for_n = (problem.n as u32 + n_stage - 1) / n_stage;
 
         Dispatch::cube_count(cubes_for_m, cubes_for_n, problem.num_batches() as u32)
-    }
-
-    fn advanced_config() -> crate::matmul::kernels::matmul::AdvancedConfig {
-        crate::matmul::kernels::matmul::AdvancedConfig {
-            lhs_tiling_layout: stage::TilingLayout::Contiguous(stage::TilingOrder::ColMajor),
-            rhs_tiling_layout: stage::TilingLayout::Contiguous(stage::TilingOrder::RowMajor),
-            enforced_matrix_layout: (None, None),
-        }
     }
 }

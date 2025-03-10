@@ -16,12 +16,12 @@ pub enum LineMode {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ReduceConfig {
-    pub(crate) cube_count: CubeCount,
-    pub(crate) cube_dim: CubeDim,
-    pub(crate) line_mode: LineMode,
-    pub(crate) line_size: u32,
-    pub(crate) bound_checks: bool,
+pub struct ReduceConfig {
+    pub cube_count: CubeCount,
+    pub cube_dim: CubeDim,
+    pub line_mode: LineMode,
+    pub line_size: u32,
+    pub bound_checks: bool,
 }
 
 impl ReduceConfig {
@@ -96,7 +96,7 @@ impl ReduceConfig {
                 // contiguous in the input and output. This is obtained by taking the head of each list until they are different.
                 // In the above example, only the 0 axis is contiguous in both tensor, but it output sorted axis were [0, 1, 3, 2] instead,
                 // both the 0 and 3 axes would be contiguous in the two tensors.
-                // The corresponding number of entries is the product of the shape for the contigous axes.
+                // The corresponding number of entries is the product of the shape for the contiguous axes.
                 // In the example, it is simply 2.
                 //
                 // This gives us an upper bound on the line size we can used.
@@ -135,7 +135,7 @@ impl ReduceConfig {
         self
     }
 
-    fn generate_cube_dim<S: ComputeServer, C: ComputeChannel<S>>(
+    pub fn generate_cube_dim<S: ComputeServer, C: ComputeChannel<S>>(
         mut self,
         client: &ComputeClient<S, C>,
         use_planes: bool,
@@ -149,7 +149,7 @@ impl ReduceConfig {
         self
     }
 
-    fn generate_cube_count<R: Runtime>(
+    pub fn generate_cube_count<R: Runtime>(
         mut self,
         reduce_count: u32,
         strategy: &ReduceStrategy,

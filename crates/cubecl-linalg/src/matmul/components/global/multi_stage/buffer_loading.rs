@@ -12,7 +12,7 @@ pub struct BufferLoading {}
 
 impl LoadingValidation for BufferLoading {
     fn check<C: GlobalConfig>(config: &C, ident: Ident) -> Result<(), InvalidConfigError> {
-        let tiling = config.stage_tiling(ident);
+        let tiling = config.tiling_dimensions(ident);
         let line_size = config.global_line_size(ident);
 
         let num_stage_elements = tiling.total_size();
@@ -23,12 +23,6 @@ impl LoadingValidation for BufferLoading {
             return Err(Box::new(
                 "Too many data will be loaded, resulting in out of bounds. 
         Try setting line size and number of planes so that jump_length divides num_stage_elements.",
-            ));
-        }
-
-        if config.transpose_load(ident) {
-            return Err(Box::new(
-                "Transpose load not yet supported in buffered setup",
             ));
         }
 
@@ -46,7 +40,7 @@ impl BufferLoading {
         #[comptime] ident: Ident,
         #[comptime] config: G,
     ) {
-        let tiling = config.stage_tiling(ident);
+        let tiling = config.tiling_dimensions(ident);
         let line_size = config.global_line_size(ident);
 
         let num_buffer_elements = tiling.buffer_size(ident.as_input());
@@ -73,8 +67,13 @@ impl BufferLoading {
 
             let (tile_x, tile_y) = get_tiles_x_y(nth_buffer_tile, ident);
 
-            let line_read =
-                read_view.load_coalesced::<G>(tile_x, tile_y, pos_within_tile, ident, config);
+            let line_read = read_view.load_coalesced_in_tile::<G>(
+                tile_x,
+                tile_y,
+                pos_within_tile,
+                ident,
+                config,
+            );
 
             buffer_slice[unit_position / line_size] = Line::cast_from(line_read);
         }

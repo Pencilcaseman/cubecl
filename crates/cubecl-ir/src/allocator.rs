@@ -4,6 +4,8 @@ use core::cell::RefCell;
 use hashbrown::HashMap;
 use portable_atomic::{AtomicU32, Ordering};
 
+use crate::BarrierLevel;
+
 use super::{Item, Matrix, Variable, VariableKind};
 
 /// An allocator for local variables of a kernel.
@@ -20,7 +22,7 @@ use super::{Item, Matrix, Variable, VariableKind};
 ///
 /// In order, prefer immutable local variables, then mutable, then restricted.
 ///
-/// To enable many compiler optimizations, it is prefered to use the [static single-assignment] strategy for immutable variables.
+/// To enable many compiler optimizations, it is preferred to use the [static single-assignment] strategy for immutable variables.
 /// That is, each variable must be declared and used exactly once.
 ///
 /// [static single-assignment](https://en.wikipedia.org/wiki/Static_single-assignment_form)
@@ -106,6 +108,12 @@ impl Allocator {
             },
             item,
         );
+        ExpandElement::Plain(variable)
+    }
+
+    pub fn create_barrier(&self, item: Item, level: BarrierLevel) -> ExpandElement {
+        let id = self.new_local_index();
+        let variable = Variable::new(VariableKind::Barrier { id, item, level }, item);
         ExpandElement::Plain(variable)
     }
 

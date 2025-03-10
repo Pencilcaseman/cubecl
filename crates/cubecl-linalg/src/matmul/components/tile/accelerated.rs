@@ -4,11 +4,12 @@ use crate::matmul::components::{
     as_cmma_layout, Ident, InvalidConfigError, MatmulConfigFactory, MatmulPrecision, MatmulProblem,
     MatmulSize, MatrixLayout,
 };
-use crate::matmul::kernels::matmul::AdvancedConfig;
 use crate::matmul::kernels::MatmulAvailabilityError;
 use cubecl_core::ir::{Elem, FloatKind};
 use cubecl_core::{self as cubecl, Feature};
 use cubecl_core::{cmma, prelude::*};
+
+use super::Tile;
 
 pub struct Accelerated;
 
@@ -42,7 +43,7 @@ impl<I: Numeric, O: Numeric> TileMatmul<I, O> for Accelerated {
 
     fn allocate_lhs(#[comptime] config: Config) -> Self::Lhs {
         let size = config.size;
-        let layout = config.layout(Ident::Lhs);
+        let layout = config.matrix_layout(Ident::Lhs);
         unsafe {
             cmma::Matrix::<I>::uninitialized(
                 cmma::MatrixIdent::A, // Check versus Ident
@@ -56,7 +57,7 @@ impl<I: Numeric, O: Numeric> TileMatmul<I, O> for Accelerated {
 
     fn allocate_rhs(#[comptime] config: Config) -> Self::Rhs {
         let size = config.size;
-        let layout = config.layout(Ident::Rhs);
+        let layout = config.matrix_layout(Ident::Rhs);
         unsafe {
             cmma::Matrix::<I>::uninitialized(
                 cmma::MatrixIdent::B,
@@ -68,36 +69,20 @@ impl<I: Numeric, O: Numeric> TileMatmul<I, O> for Accelerated {
         }
     }
 
-    fn fill_lhs(slice: &Slice<Line<I>>, lhs: &mut Self::Lhs, #[comptime] config: Config) {
-        cmma::load(
-            lhs,
-            slice,
-            match config.layout(Ident::Lhs) {
-                MatrixLayout::RowMajor => config.size.k,
-                MatrixLayout::ColMajor => config.size.m,
-            },
-        );
+    fn fill_lhs(tile: &Tile<I>, lhs: &mut Self::Lhs, #[comptime] config: Config) {
+        let (slice, stride) = tile.as_unlined::<Config>(Ident::Lhs, config);
+        cmma::load(lhs, &slice, stride);
     }
 
-    fn fill_rhs(slice: &Slice<Line<I>>, rhs: &mut Self::Rhs, #[comptime] config: Config) {
-        cmma::load(
-            rhs,
-            slice,
-            match config.layout(Ident::Rhs) {
-                MatrixLayout::RowMajor => config.size.n,
-                MatrixLayout::ColMajor => config.size.k,
-            },
-        );
+    fn fill_rhs(tile: &Tile<I>, rhs: &mut Self::Rhs, #[comptime] config: Config) {
+        let (slice, stride) = tile.as_unlined::<Config>(Ident::Rhs, config);
+        cmma::load(rhs, &slice, stride);
     }
 
-    fn fill_accumulator(
-        slice: &Slice<Line<O>>,
-        acc: &mut Self::Accumulator,
-        stride: u32,
-        #[comptime] config: Config,
-    ) {
-        let layout = comptime!(as_cmma_layout(config.layout(Ident::Out)));
-        cmma::load_with_layout(acc, slice, stride, layout);
+    fn fill_accumulator(tile: &Tile<O>, acc: &mut Self::Accumulator, #[comptime] config: Config) {
+        let layout = comptime!(as_cmma_layout(config.matrix_layout(Ident::Out)));
+        let (slice, stride) = tile.as_unlined::<Config>(Ident::Out, config);
+        cmma::load_with_layout(acc, &slice, stride, layout);
     }
 
     fn read_accumulator<C: Numeric>(
@@ -190,26 +175,15 @@ impl MatmulConfigFactory for Accelerated {
         problem: &MatmulProblem,
         cube_dim: &CubeDim,
         _cube_count: &CubeCount,
-        advanced_config: &AdvancedConfig,
         _quantized: bool,
     ) -> Self::Config {
-        let (lhs_tile_layout, lhs_tile_line_size) = match advanced_config.enforced_matrix_layout.0 {
-            Some(enforced_layout) if enforced_layout != problem.lhs_layout => (enforced_layout, 1),
-            _ => (problem.lhs_layout, problem.lhs_line_size),
-        };
-
-        let (rhs_tile_layout, rhs_tile_line_size) = match advanced_config.enforced_matrix_layout.1 {
-            Some(enforced_layout) if enforced_layout != problem.rhs_layout => (enforced_layout, 1),
-            _ => (problem.rhs_layout, problem.rhs_line_size),
-        };
-
         Config::new(
             input,
             cube_dim.x,
-            lhs_tile_layout,
-            rhs_tile_layout,
-            lhs_tile_line_size as u32,
-            rhs_tile_line_size as u32,
+            problem.lhs_layout,
+            problem.rhs_layout,
+            problem.lhs_line_size as u32,
+            problem.rhs_line_size as u32,
             problem.out_line_size as u32,
         )
     }
@@ -232,7 +206,7 @@ impl TileConfig for Config {
         self.plane_dim
     }
 
-    fn layout(&self, ident: Ident) -> MatrixLayout {
+    fn matrix_layout(&self, ident: Ident) -> MatrixLayout {
         match ident {
             Ident::Lhs => self.lhs_layout,
             Ident::Rhs => self.rhs_layout,

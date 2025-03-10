@@ -3,8 +3,8 @@ use cubecl_core::prelude::*;
 
 use crate::matmul::components::global::args::{self, MatmulArgs, TensorInput, TensorOutput};
 use crate::matmul::components::{config::MatmulConfig, global, Ident, MatmulLaunch};
-use crate::matmul::components::{MatmulPrecision, StageTiling};
-use crate::tensor::{ReadWrite, VirtualTensor};
+use crate::matmul::components::{MatmulPrecision, TilingDimensions};
+use cubecl_std::tensor::r#virtual::{ReadWrite, VirtualTensor};
 
 /// A family of [matmuls](BatchMatmul) working with any [precision](MatmulPrecision).
 pub trait BatchMatmulFamily: 'static + Send + Sync + MatmulLaunch<Config: BatchConfig> {
@@ -50,7 +50,7 @@ pub trait BatchConfig: MatmulConfig {
     fn to_gmm_config(&self) -> Self::GmmConfig;
 
     /// Returns the [StageDim] for the given ident
-    fn stage_tiling(&self, ident: Ident) -> StageTiling;
+    fn tiling_dimensions(&self, ident: Ident) -> TilingDimensions;
 
     /// Returns the largest m dimension supported with these configs
     fn max_m(&self) -> u32;

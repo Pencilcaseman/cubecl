@@ -1,12 +1,15 @@
 use crate::matmul::components::global;
+use crate::matmul::components::global::base::InputLoader;
 use crate::matmul::components::global::output_loader::Unloader;
 use crate::matmul::components::global::ZeroAccumulatorLoader;
-use crate::matmul::components::global::{GlobalMatmul, InputLoader};
+use crate::matmul::components::global::{GlobalMatmul, SyncInputLoader};
 use crate::matmul::components::stage::single_buffer::{LhsBufferReader, RhsBufferReader};
-use crate::matmul::components::stage::StageMatmul;
+use crate::matmul::components::stage::{
+    ColMajorTilingOrder, ContiguousTilingLayout, RowMajorTilingOrder, StageMatmul,
+};
 use crate::matmul::components::Ident;
 use crate::matmul::components::MatmulPrecision;
-use crate::tensor::{ReadWrite, VirtualTensor};
+use cubecl_std::tensor::r#virtual::{ReadWrite, VirtualTensor};
 
 use super::config::Config;
 use super::loader::{LhsBufferLoader, RhsBufferLoader};
@@ -25,12 +28,15 @@ use crate::matmul::{
         },
         InvalidConfigError, MatmulConfigFactory, MatmulProblem,
     },
-    kernels::{matmul::AdvancedConfig, MatmulAvailabilityError},
+    kernels::MatmulAvailabilityError,
 };
 
 pub struct SpecializedMatmulFamily<SMM: stage::StageMatmulFamily> {
     _stage_matmul: PhantomData<SMM>,
 }
+
+type LhsTilingLayout = ContiguousTilingLayout<ColMajorTilingOrder>;
+type RhsTilingLayout = ContiguousTilingLayout<RowMajorTilingOrder>;
 
 impl<SMM> GlobalMatmulFamily for SpecializedMatmulFamily<SMM>
 where
@@ -39,7 +45,10 @@ where
         RhsReader = RhsBufferReaderFamily,
     >,
 {
-    type Matmul<MP: MatmulPrecision> = SpecializedMatmul<MP, SMM::Matmul<MP::ES, MP::EG, MP::EA>>;
+    type Matmul<MP: MatmulPrecision> = SpecializedMatmul<
+        MP,
+        SMM::Matmul<MP::ES, MP::EG, MP::EA, LhsTilingLayout, RhsTilingLayout>,
+    >;
 }
 
 impl<SMM> MatmulConfigFactory for SpecializedMatmulFamily<SMM>
@@ -53,7 +62,7 @@ where
         if config.num_producers() == 0 {
             return Err(Box::new("There are no producer planes. Make sure there are more planes than the underlying stage matmul requires."));
         }
-        if config.stage_tiling(Ident::Lhs).tile_count_col() <= 1 {
+        if config.tiling_dimensions(Ident::Lhs).tile_count_col() <= 1 {
             return Err(Box::new("Producer-consumer needs at least 2 buffers."));
         }
 
@@ -72,17 +81,9 @@ where
         problem: &MatmulProblem,
         cube_dim: &CubeDim,
         cube_count: &CubeCount,
-        advanced_config: &AdvancedConfig,
         quantized: bool,
     ) -> Self::Config {
-        let smm_config = SMM::make_config(
-            input,
-            problem,
-            cube_dim,
-            cube_count,
-            advanced_config,
-            quantized,
-        );
+        let smm_config = SMM::make_config(input, problem, cube_dim, cube_count, quantized);
         let stage_shape = SMM::stage_shape(&smm_config);
 
         Config::new(
@@ -96,7 +97,6 @@ where
             problem.rhs_line_size as u32,
             problem.out_line_size as u32,
             cube_dim.y,
-            global::LoadMode::Coalesced,
         )
     }
 }
@@ -118,13 +118,13 @@ where
         MP::ES,
         MP::EG,
         MP::EA,
-        LhsReader = LhsBufferReader<MP::ES>,
-        RhsReader = RhsBufferReader<MP::ES>,
+        LhsReader = LhsBufferReader<MP::ES, LhsTilingLayout>,
+        RhsReader = RhsBufferReader<MP::ES, RhsTilingLayout>,
     >,
 {
     type Config = Config<SMM::Config>;
-    type LhsLoader = LhsBufferLoader<MP::EG, MP::ES, SMM::Config>;
-    type RhsLoader = RhsBufferLoader<MP::EG, MP::ES, SMM::Config>;
+    type LhsLoader = LhsBufferLoader<MP::EG, MP::ES, SMM::Config, LhsTilingLayout>;
+    type RhsLoader = RhsBufferLoader<MP::EG, MP::ES, SMM::Config, RhsTilingLayout>;
     type AccumulatorLoader = ZeroAccumulatorLoader;
     type Out = Unloader<MP::EG>;
     type Accumulator = SMM::Accumulator;
@@ -139,8 +139,8 @@ where
     ) {
         let is_consumer = Self::is_consumer(config);
 
-        let num_buffers = config.stage_tiling(Ident::Lhs).tile_count_col();
-        let buffer_step = config.stage_tiling(Ident::Lhs).tile_shape_col();
+        let num_buffers = config.tiling_dimensions(Ident::Lhs).tile_count_col();
+        let buffer_step = config.tiling_dimensions(Ident::Lhs).tile_shape_col();
         let k_step = num_buffers * buffer_step; // equal to SMM::K
 
         let range = k_range.1 - k_range.0;
@@ -244,8 +244,8 @@ impl<
             MP::ES,
             MP::EG,
             MP::EA,
-            LhsReader = LhsBufferReader<MP::ES>,
-            RhsReader = RhsBufferReader<MP::ES>,
+            LhsReader = LhsBufferReader<MP::ES, LhsTilingLayout>,
+            RhsReader = RhsBufferReader<MP::ES, RhsTilingLayout>,
         >,
     > SpecializedMatmul<MP, SMM>
 {

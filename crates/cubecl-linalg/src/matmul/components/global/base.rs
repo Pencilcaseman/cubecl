@@ -1,15 +1,14 @@
 use cubecl_core as cubecl;
 use cubecl_core::prelude::*;
-use pipeline::Pipeline;
 
-use crate::matmul::components::stage::{self, StageWriter, TilingLayout};
+use crate::matmul::components::stage::{self, StageWriter};
 use crate::matmul::components::{config::MatmulConfig, tile};
 use crate::matmul::components::{Ident, MatrixLayout};
 use crate::matmul::components::{InvalidConfigError, MatmulConfigFactory};
-use crate::matmul::components::{MatmulPrecision, StageTiling};
-use crate::tensor::{ReadWrite, VirtualTensor};
+use crate::matmul::components::{MatmulPrecision, TilingDimensions};
+use cubecl_std::tensor::r#virtual::{ReadWrite, VirtualTensor};
 
-use super::LoadMode;
+use super::loader::r#async::CopyMechanism;
 
 /// A family of [matmuls](GlobalMatmul) working with any [precision](MatmulPrecision).
 pub trait GlobalMatmulFamily:
@@ -39,8 +38,8 @@ pub trait GlobalMatmulFamily:
 /// before loading data.
 pub trait GlobalMatmul<MP: MatmulPrecision>: 'static + Send + Sync {
     type Config: GlobalConfig;
-    type LhsLoader: InputLoader<MP::EG, MP::ES, Self::Config>;
-    type RhsLoader: InputLoader<MP::EG, MP::ES, Self::Config>;
+    type LhsLoader: CubeType;
+    type RhsLoader: CubeType;
     type AccumulatorLoader: CubeType;
     type Out: OutputLoader<MP::EG>;
     type Accumulator: CubeType;
@@ -102,17 +101,30 @@ pub trait InputLoader<EG: Numeric, ES: Numeric, G: GlobalConfig>:
     /// The stage reader which matches the input of the underlying stage matmul.
     type StageReader: CubeType;
 
-    /// Fills the stage at the current k offset.
-    fn fill_stage(this: &mut Self, #[comptime] config: G);
-
-    /// Fills the stage at the current k offset.
-    fn fill_stage_window(this: &mut Self, pipeline: Pipeline<ES>, #[comptime] config: G);
-
     /// Returns a reader for the stage at the current k offset
     fn as_stage_reader(this: &Self) -> Self::StageReader;
 
     /// Move the k offset by k_offset
     fn advance_view(this: &mut Self, k_offset: u32);
+
+    /// Fills the stage with zeros
+    fn clear_stage(this: &mut Self, #[comptime] config: G);
+}
+
+#[cube]
+pub trait SyncInputLoader<EG: Numeric, ES: Numeric, G: GlobalConfig>:
+    InputLoader<EG, ES, G>
+{
+    /// Fills the stage at the current k offset.
+    fn fill_stage(this: &mut Self, #[comptime] config: G);
+}
+
+#[cube]
+pub trait AsyncInputLoader<EG: Numeric, ES: Numeric, G: GlobalConfig>:
+    InputLoader<EG, ES, G>
+{
+    /// Fills the stage at the current k offset.
+    fn fill_stage<CM: CopyMechanism<ES>>(this: &mut Self, mechanism: &CM, #[comptime] config: G);
 }
 
 #[cube]
@@ -165,10 +177,10 @@ pub trait GlobalConfig: MatmulConfig {
     fn stage_line_size(&self, ident: Ident) -> u32;
 
     /// Returns the [StageTiling] for the given ident
-    fn stage_tiling(&self, ident: Ident) -> StageTiling;
+    fn tiling_dimensions(&self, ident: Ident) -> TilingDimensions;
 
     /// Returns the [MatrixLayout] for the given ident
-    fn layout(&self, ident: Ident) -> MatrixLayout;
+    fn matrix_layout(&self, ident: Ident) -> MatrixLayout;
 
     /// Returns the number of planes in the cube
     fn num_planes(&self) -> u32;
@@ -176,17 +188,12 @@ pub trait GlobalConfig: MatmulConfig {
     /// Returns the size of the plane dimension
     fn plane_dim(&self) -> u32;
 
-    /// Returns the order in which tiles should be loaded to the stage
-    fn tiling_layout(&self, ident: Ident) -> TilingLayout;
-
     /// Whether to check if accessing a row would exceed bounds.
     fn check_row_bounds(&self, ident: Ident) -> bool;
 
     /// Whether to check if accessing a col would exceed bounds.
     fn check_col_bounds(&self, ident: Ident) -> bool;
 
-    /// Whether we transpose data when loading to the stage
-    fn transpose_load(&self, ident: Ident) -> bool;
-
-    fn load_mode(&self) -> LoadMode;
+    /// Whether to check if accessing a col for lhs or row for rhs would exceed bounds.
+    fn check_k_bounds(&self) -> bool;
 }
