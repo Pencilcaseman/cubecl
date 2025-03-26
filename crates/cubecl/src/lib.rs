@@ -9,6 +9,9 @@ pub use cubecl_cuda as cuda;
 #[cfg(feature = "hip")]
 pub use cubecl_hip as hip;
 
+#[cfg(feature = "mlir")]
+pub use cubecl_mlir as mlir;
+
 #[cfg(feature = "linalg")]
 pub use cubecl_linalg as linalg;
 
