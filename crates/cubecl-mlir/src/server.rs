@@ -2,7 +2,7 @@ use std::future::Future;
 
 use cubecl_common::future;
 use cubecl_core::{
-    prelude::CubeTask, server::Handle, Feature, MemoryConfiguration,
+    prelude::CubeTask, server::Handle, Compiler, Feature, MemoryConfiguration,
 };
 use cubecl_runtime::{
     memory_management::{
@@ -22,6 +22,7 @@ use crate::{
 #[derive(Debug)]
 pub struct MlirServer {
     mem: MemoryManagement<MlirStorage>,
+    compilation_options: MlirCompilationOptions,
 }
 
 impl MlirServer {
@@ -36,6 +37,7 @@ impl MlirServer {
                 &memory_properties,
                 memory_config,
             ),
+            compilation_options: MlirCompilationOptions::default(),
         }
     }
 }
@@ -80,7 +82,8 @@ impl ComputeServer for MlirServer {
 
     unsafe fn execute(
         &mut self,
-        kernel: Self::Kernel,
+        // kernel: Self::Kernel,
+        kernel: <Self as ComputeServer>::Kernel,
         count: server::CubeCount,
         bindings: Vec<server::Binding>,
         mode: cubecl_core::ExecutionMode,
@@ -89,12 +92,18 @@ impl ComputeServer for MlirServer {
 
         println!("Kernel Name: {}", kernel.name());
 
-        // kernel.compile()
+        let mut kernel_id = kernel.id();
+        kernel_id.mode(mode);
 
-        // println!("Kernel: {kernel:?}");
+        let mut compiler = MlirCompiler::new();
+
+        println!("Kernel ID: {}", kernel.id());
         println!("Count: {count:?}");
         println!("Bindings: {bindings:?}");
         println!("Mode: {mode:?}");
+
+        let compiled_kernel =
+            kernel.compile(&mut compiler, &self.compilation_options, mode);
 
         todo!()
     }

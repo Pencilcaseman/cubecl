@@ -29,6 +29,10 @@ impl Compiler for MlirCompiler {
         compilation_options: &Self::CompilationOptions,
         mode: ExecutionMode,
     ) -> Self::Representation {
+        println!("Compiling Kernel");
+
+        println!("Kernel structure: {:?}", kernel.body);
+
         todo!()
     }
 
