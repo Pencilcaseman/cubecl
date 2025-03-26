@@ -1,3 +1,4 @@
+#![allow(unknown_lints)] // `manual_div_ceil` only appeared in 1.83
 #![allow(clippy::manual_div_ceil)]
 
 use cubecl::prelude::barrier::{Barrier, BarrierLevel};
@@ -149,7 +150,7 @@ impl CopyStrategy for MemcpyAsyncSingleSliceDuplicatedAll {
     }
 
     fn wait<E: Float>(barrier: Self::Barrier<E>) {
-        barrier.wait();
+        barrier.arrive_and_wait();
     }
 }
 
@@ -179,7 +180,7 @@ impl CopyStrategy for MemcpyAsyncSingleSliceElected {
     }
 
     fn wait<E: Float>(barrier: Self::Barrier<E>) {
-        barrier.wait();
+        barrier.arrive_and_wait();
     }
 }
 
@@ -209,7 +210,7 @@ impl CopyStrategy for MemcpyAsyncSingleSliceElectedCooperative {
     }
 
     fn wait<E: Float>(barrier: Self::Barrier<E>) {
-        barrier.wait();
+        barrier.arrive_and_wait();
     }
 }
 
@@ -243,7 +244,7 @@ impl CopyStrategy for MemcpyAsyncSplitPlaneDuplicatedUnit {
     }
 
     fn wait<E: Float>(barrier: Self::Barrier<E>) {
-        barrier.wait();
+        barrier.arrive_and_wait();
     }
 }
 
@@ -279,7 +280,7 @@ impl CopyStrategy for MemcpyAsyncSplitPlaneElectedUnit {
     }
 
     fn wait<E: Float>(barrier: Self::Barrier<E>) {
-        barrier.wait();
+        barrier.arrive_and_wait();
     }
 }
 
@@ -316,7 +317,7 @@ impl CopyStrategy for MemcpyAsyncSplitDuplicatedAll {
     }
 
     fn wait<E: Float>(barrier: Self::Barrier<E>) {
-        barrier.wait();
+        barrier.arrive_and_wait();
     }
 }
 
@@ -352,7 +353,7 @@ impl CopyStrategy for MemcpyAsyncSplitLargeUnitWithIdle {
     }
 
     fn wait<E: Float>(barrier: Self::Barrier<E>) {
-        barrier.wait();
+        barrier.arrive_and_wait();
     }
 }
 
@@ -390,7 +391,7 @@ impl CopyStrategy for MemcpyAsyncSplitSmallUnitCoalescedLoop {
     }
 
     fn wait<E: Float>(barrier: Self::Barrier<E>) {
-        barrier.wait();
+        barrier.arrive_and_wait();
     }
 }
 
@@ -426,7 +427,7 @@ impl CopyStrategy for MemcpyAsyncSplitMediumUnitCoalescedOnce {
     }
 
     fn wait<E: Float>(barrier: Self::Barrier<E>) {
-        barrier.wait();
+        barrier.arrive_and_wait();
     }
 }
 
@@ -748,9 +749,11 @@ impl<R: Runtime, E: Float> Benchmark for MemcpyAsyncBench<R, E> {
     }
 
     fn name(&self) -> String {
+        let client = R::client(&self.device);
+
         format!(
             "memcpy_async-{}-{}-{:?}",
-            R::name(),
+            R::name(&client),
             E::as_elem_native_unchecked(),
             self.strategy
         )
@@ -801,8 +804,6 @@ fn run<R: Runtime, E: Float>(device: R::Device, strategy: CopyStrategyEnum) {
 fn main() {
     #[cfg(feature = "cuda")]
     {
-        use half::f16;
-
         run::<cubecl::cuda::CudaRuntime, f32>(Default::default(), CopyStrategyEnum::DummyCopy);
         run::<cubecl::cuda::CudaRuntime, f32>(Default::default(), CopyStrategyEnum::CoalescedCopy);
         run::<cubecl::cuda::CudaRuntime, f32>(

@@ -9,9 +9,9 @@ use hashbrown::{HashMap, HashSet};
 use rspirv::spirv::{BuiltIn, CooperativeMatrixLayout, CooperativeMatrixUse, StorageClass, Word};
 
 use crate::{
+    SpirvCompiler, SpirvTarget,
     item::{Elem, Item},
     variable::{ConstVal, Globals, Variable},
-    SpirvCompiler, SpirvTarget,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -75,6 +75,7 @@ pub struct Array {
     pub item: Item,
     pub len: u32,
     pub var: ir::Variable,
+    pub alignment: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -297,6 +298,7 @@ impl<T: SpirvTarget> SpirvCompiler<T> {
                 item,
                 len: arr.length,
                 var,
+                alignment: None,
             },
         );
     }

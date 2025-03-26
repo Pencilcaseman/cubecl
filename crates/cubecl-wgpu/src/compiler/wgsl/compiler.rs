@@ -1,14 +1,13 @@
 use super::Subgroup;
-use super::{shader::ComputeShader, ConstantArray};
+use super::{ConstantArray, shader::ComputeShader};
 use super::{Item, LocalArray, SharedMemory};
 use crate::compiler::wgsl;
 
 use cubecl_common::ExecutionMode;
 use cubecl_core::{
-    compute,
+    Metadata, WgpuCompilationOptions, compute,
     ir::{self as cube, Scope},
     prelude::{expand_checked_index_assign, expand_erf},
-    Metadata, WgpuCompilationOptions,
 };
 
 /// Wgsl Compiler.
@@ -60,6 +59,10 @@ impl cubecl_core::Compiler for WgslCompiler {
 
     fn elem_size(&self, elem: cube::Elem) -> usize {
         Self::compile_elem(elem).size()
+    }
+
+    fn extension(&self) -> &'static str {
+        "wgsl"
     }
 }
 
@@ -217,11 +220,15 @@ impl WgslCompiler {
             cube::VariableKind::ConstantScalar(value) => {
                 wgsl::Variable::ConstantScalar(value, Self::compile_elem(value.elem()))
             }
-            cube::VariableKind::SharedMemory { id, length } => {
+            cube::VariableKind::SharedMemory {
+                id,
+                length,
+                alignment,
+            } => {
                 let item = Self::compile_item(item);
                 if !self.shared_memories.iter().any(|s| s.index == id) {
                     self.shared_memories
-                        .push(SharedMemory::new(id, item, length));
+                        .push(SharedMemory::new(id, item, length, alignment));
                 }
                 wgsl::Variable::SharedMemory(id, item, length)
             }
@@ -326,6 +333,7 @@ impl WgslCompiler {
             cube::VariableKind::Barrier { .. } => {
                 panic!("Barrier not supported.")
             }
+            cube::VariableKind::TensorMap(_) => panic!("Tensor map not supported."),
         }
     }
 
@@ -399,7 +407,6 @@ impl WgslCompiler {
             cube::Operation::NonSemantic(cube::NonSemantic::Comment { content }) => {
                 self.compile_comment(instructions, content)
             }
-            // No good way to attach debug info
             cube::Operation::NonSemantic(_) => {}
             cube::Operation::Pipeline(_) => {
                 panic!("Pipeline isn't supported on wgpu.")
@@ -407,6 +414,7 @@ impl WgslCompiler {
             cube::Operation::Barrier(_) => {
                 panic!("Barrier isn't supported on wgpu.")
             }
+            cube::Operation::Tma(_) => panic!("TMA isn't supported on wgpu."),
         }
     }
 
@@ -529,6 +537,7 @@ impl WgslCompiler {
             cube::Synchronization::SyncStorage => {
                 instructions.push(wgsl::Instruction::StorageBarrier)
             }
+            cube::Synchronization::SyncProxyShared => panic!("TMA is not supported in WGSL"),
         };
     }
 
@@ -992,6 +1001,15 @@ impl WgslCompiler {
                 or_else: self.compile_variable(op.or_else),
                 out: self.compile_variable(out),
             }),
+            cube::Operator::ConditionalRead(op) => {
+                instructions.push(wgsl::Instruction::ConditionalRead {
+                    cond: self.compile_variable(op.cond),
+                    slice: self.compile_variable(op.slice),
+                    index: self.compile_variable(op.index),
+                    fallback: self.compile_variable(op.fallback),
+                    out: self.compile_variable(out),
+                })
+            }
         }
     }
 

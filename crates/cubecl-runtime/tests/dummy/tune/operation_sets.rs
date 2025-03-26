@@ -1,5 +1,5 @@
 #[cfg(autotune_persistent_cache)]
-use rand::{distr::Alphanumeric, Rng};
+use rand::{Rng, distr::Alphanumeric};
 use std::sync::Arc;
 
 use cubecl_runtime::{
@@ -8,12 +8,12 @@ use cubecl_runtime::{
 };
 
 use crate::{
+    DummyKernel,
     dummy::{
         CacheTestFastOn3, CacheTestSlowOn3, DummyClient, DummyElementwiseAddition,
         DummyElementwiseMultiplication, DummyElementwiseMultiplicationSlowWrong,
         OneKernelAutotuneOperation,
     },
-    DummyKernel,
 };
 
 use super::DummyElementwiseAdditionSlowWrong;
@@ -71,7 +71,12 @@ pub fn cache_test_set(
     ) -> impl Fn(Vec<Binding>) {
         let kernel = Arc::new(kernel);
         move |_| {
-            client.execute(kernel.clone(), CubeCount::Static(1, 1, 1), bindings.clone());
+            client.execute(
+                kernel.clone(),
+                CubeCount::Static(1, 1, 1),
+                Vec::new(),
+                bindings.clone(),
+            );
         }
     }
     let mut set = TestSet::new(

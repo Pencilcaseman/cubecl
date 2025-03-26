@@ -1,4 +1,4 @@
-use cubecl_core::{ir::Elem, CubeCount};
+use cubecl_core::{CubeCount, ir::Elem};
 use std::fmt::Debug;
 
 use crate::matmul::components::InvalidConfigError;
@@ -7,6 +7,7 @@ pub enum MatmulLaunchError {
     Unavailable(MatmulAvailabilityError),
     InvalidProblem(MatmulInvalidProblem),
     InvalidConfig(InvalidConfigError),
+    Unimplemented(MatmulUnimplementedError),
 }
 
 pub enum MatmulAvailabilityError {
@@ -29,6 +30,7 @@ pub enum MatmulAvailabilityError {
     },
     PipelineUnavailable,
     BarrierUnavailable,
+    TmaUnavailable,
 }
 
 pub enum MatmulInvalidProblem {
@@ -58,6 +60,12 @@ impl From<InvalidConfigError> for MatmulLaunchError {
     }
 }
 
+impl From<MatmulUnimplementedError> for MatmulLaunchError {
+    fn from(value: MatmulUnimplementedError) -> Self {
+        Self::Unimplemented(value)
+    }
+}
+
 impl Debug for MatmulLaunchError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -80,6 +88,13 @@ impl Debug for MatmulLaunchError {
                     f,
                     "Unable to launch matmul because the config is invalid: {:?}",
                     err.to_string()
+                )
+            }
+            MatmulLaunchError::Unimplemented(err) => {
+                writeln!(
+                    f,
+                    "Unable to launch matmul because the feature is not ready: {:?}",
+                    err
                 )
             }
         }
@@ -131,10 +146,13 @@ impl Debug for MatmulAvailabilityError {
             }
             MatmulAvailabilityError::PlaneDimUnknown => {
                 writeln!(f, "Plane dimension unknown.")
-            },
-            MatmulAvailabilityError::PlaneDimUnsupported{plane_dim} => {
-                writeln!(f, "Plane dimension unsupported: {plane_dim}. Only 32 & 64 are supported.")
-            },
+            }
+            MatmulAvailabilityError::PlaneDimUnsupported { plane_dim } => {
+                writeln!(
+                    f,
+                    "Plane dimension unsupported: {plane_dim}. Only 32 & 64 are supported."
+                )
+            }
             MatmulAvailabilityError::TypesUnavailable { input, output } => {
                 writeln!(
                     f,
@@ -151,15 +169,31 @@ impl Debug for MatmulAvailabilityError {
             } => writeln!(
                 f,
                 "Cmma on inputs {:?} and outputs {:?} with shape m={:?}, n={:?}, k={:?} not supported.",
-                input,
-                output, m, n, k
+                input, output, m, n, k
             ),
             MatmulAvailabilityError::PipelineUnavailable => {
                 writeln!(f, "Pipeline is not available.")
-            },
+            }
             MatmulAvailabilityError::BarrierUnavailable => {
                 writeln!(f, "Barrier is not available.")
-            },
+            }
+            MatmulAvailabilityError::TmaUnavailable => {
+                writeln!(f, "TMA is not available.")
+            }
+        }
+    }
+}
+
+pub enum MatmulUnimplementedError {
+    Quantization,
+}
+
+impl Debug for MatmulUnimplementedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MatmulUnimplementedError::Quantization => {
+                writeln!(f, "Quantization")
+            }
         }
     }
 }

@@ -1,14 +1,19 @@
 use cubecl_core as cubecl;
 use cubecl_core::prelude::*;
 
-use crate::matmul::components::stage::{self, StageWriter};
-use crate::matmul::components::{config::MatmulConfig, tile};
-use crate::matmul::components::{Ident, MatrixLayout};
-use crate::matmul::components::{InvalidConfigError, MatmulConfigFactory};
-use crate::matmul::components::{MatmulPrecision, TilingDimensions};
-use cubecl_std::tensor::r#virtual::{ReadWrite, VirtualTensor};
+use crate::matmul::components::{
+    Ident, InvalidConfigError, MatmulConfigFactory, MatmulPrecision, MatrixLayout,
+    TilingDimensions,
+    config::MatmulConfig,
+    stage::{self, StageWriter},
+    tile,
+};
+use cubecl_std::{
+    CubeOption,
+    tensor::r#virtual::{ReadWrite, VirtualTensor},
+};
 
-use super::loader::r#async::CopyMechanism;
+use super::IndexedQuantization;
 
 /// A family of [matmuls](GlobalMatmul) working with any [precision](MatmulPrecision).
 pub trait GlobalMatmulFamily:
@@ -56,6 +61,7 @@ pub trait GlobalMatmul<MP: MatmulPrecision>: 'static + Send + Sync {
         unloader: Self::Out,
         acc: &mut Self::Accumulator,
         k_range: (u32, u32),
+        quantization: CubeOption<IndexedQuantization<MP::EG>>,
         #[comptime] config: Self::Config,
     );
 
@@ -64,6 +70,7 @@ pub trait GlobalMatmul<MP: MatmulPrecision>: 'static + Send + Sync {
         lhs: VirtualTensor<MP::EG>,
         m_offset: u32,
         k_offset: u32,
+        nth_batch: u32,
         batch_offset: u32,
         #[comptime] config: Self::Config,
     ) -> Self::LhsLoader;
@@ -73,6 +80,7 @@ pub trait GlobalMatmul<MP: MatmulPrecision>: 'static + Send + Sync {
         rhs: VirtualTensor<MP::EG>,
         k_offset: u32,
         n_offset: u32,
+        nth_batch: u32,
         batch_offset: u32,
         #[comptime] config: Self::Config,
     ) -> Self::RhsLoader;
@@ -82,6 +90,7 @@ pub trait GlobalMatmul<MP: MatmulPrecision>: 'static + Send + Sync {
         out: VirtualTensor<MP::EG, ReadWrite>,
         m_offset: u32,
         n_offset: u32,
+        nth_batch: u32,
         batch_offset: u32,
     ) -> Self::Out;
 
@@ -90,41 +99,6 @@ pub trait GlobalMatmul<MP: MatmulPrecision>: 'static + Send + Sync {
 
     /// Fill the accumulator with zeros
     fn zero_accumulator(acc: &mut Self::Accumulator, #[comptime] config: Self::Config);
-}
-
-#[cube]
-/// Input to the global matmul, responsible of filling the stage and providing a reader for it.
-/// Advances along the k-dimension to fill the stage with further data.
-pub trait InputLoader<EG: Numeric, ES: Numeric, G: GlobalConfig>:
-    CubeType + 'static + Send + Sync
-{
-    /// The stage reader which matches the input of the underlying stage matmul.
-    type StageReader: CubeType;
-
-    /// Returns a reader for the stage at the current k offset
-    fn as_stage_reader(this: &Self) -> Self::StageReader;
-
-    /// Move the k offset by k_offset
-    fn advance_view(this: &mut Self, k_offset: u32);
-
-    /// Fills the stage with zeros
-    fn clear_stage(this: &mut Self, #[comptime] config: G);
-}
-
-#[cube]
-pub trait SyncInputLoader<EG: Numeric, ES: Numeric, G: GlobalConfig>:
-    InputLoader<EG, ES, G>
-{
-    /// Fills the stage at the current k offset.
-    fn fill_stage(this: &mut Self, #[comptime] config: G);
-}
-
-#[cube]
-pub trait AsyncInputLoader<EG: Numeric, ES: Numeric, G: GlobalConfig>:
-    InputLoader<EG, ES, G>
-{
-    /// Fills the stage at the current k offset.
-    fn fill_stage<CM: CopyMechanism<ES>>(this: &mut Self, mechanism: &CM, #[comptime] config: G);
 }
 
 #[cube]

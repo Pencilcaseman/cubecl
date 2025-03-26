@@ -13,12 +13,12 @@ pub mod index;
 pub mod launch;
 pub mod line;
 pub mod metadata;
-pub mod option;
 pub mod pipeline;
 pub mod plane;
 pub mod sequence;
 pub mod slice;
 pub mod tensor;
+pub mod tensormap;
 pub mod topology;
 pub mod traits;
 pub mod unary;
@@ -92,6 +92,7 @@ macro_rules! testgen_float {
         cubecl_core::testgen_slice!();
         cubecl_core::testgen_unary!();
         cubecl_core::testgen_atomic_float!();
+        cubecl_core::testgen_tensormap!();
     };
 }
 
@@ -124,7 +125,6 @@ macro_rules! testgen_untyped {
         cubecl_core::testgen_tensor_indexing!();
         cubecl_core::testgen_debug!();
 
-        cubecl_core::testgen_option!();
         cubecl_core::testgen_enums!();
     };
 }
@@ -133,7 +133,7 @@ macro_rules! testgen_untyped {
 #[macro_export]
 macro_rules! as_bytes {
     ($ty:ident: $($elem:expr),*) => {
-        F::as_bytes(&[$($ty::new($elem),)*])
+        $ty::as_bytes(&[$($ty::new($elem),)*])
     };
 }
 

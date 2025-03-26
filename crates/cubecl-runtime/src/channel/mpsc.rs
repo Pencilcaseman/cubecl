@@ -1,12 +1,12 @@
 use std::{sync::Arc, thread};
 
-use cubecl_common::{benchmark::TimestampsResult, ExecutionMode};
+use cubecl_common::{ExecutionMode, benchmark::TimestampsResult};
 
 use super::ComputeChannel;
 use crate::{
     memory_management::MemoryUsage,
-    server::{Binding, ComputeServer, CubeCount, Handle},
-    storage::BindingResource,
+    server::{Binding, BindingWithMeta, ComputeServer, ConstBinding, CubeCount, Handle},
+    storage::{BindingResource, ComputeStorage},
 };
 
 /// Create a channel using a [multi-producer, single-consumer channel to communicate with
@@ -35,14 +35,25 @@ where
     Server: ComputeServer,
 {
     Read(Vec<Binding>, Callback<Vec<Vec<u8>>>),
-    GetResource(Binding, Callback<BindingResource<Server>>),
+    ReadTensor(Vec<BindingWithMeta>, Callback<Vec<Vec<u8>>>),
+    GetResource(
+        Binding,
+        Callback<BindingResource<<Server::Storage as ComputeStorage>::Resource>>,
+    ),
     Create(Vec<u8>, Callback<Handle>),
+    CreateTensor(Vec<u8>, Vec<usize>, usize, Callback<(Handle, Vec<usize>)>),
     Empty(usize, Callback<Handle>),
-    ExecuteKernel((Server::Kernel, CubeCount, ExecutionMode), Vec<Binding>),
+    EmptyTensor(Vec<usize>, usize, Callback<(Handle, Vec<usize>)>),
+    ExecuteKernel(
+        (Server::Kernel, CubeCount, ExecutionMode),
+        Vec<ConstBinding>,
+        Vec<Binding>,
+    ),
     Flush,
     SyncElapsed(Callback<TimestampsResult>),
     Sync(Callback<()>),
-    GetMemoryUsage(Callback<MemoryUsage>),
+    MemoryUsage(Callback<MemoryUsage>),
+    MemoryCleanup,
     EnableTimestamps,
     DisableTimestamps,
 }
@@ -65,6 +76,10 @@ where
                             let data = server.read(bindings).await;
                             callback.send(data).await.unwrap();
                         }
+                        Message::ReadTensor(bindings, callback) => {
+                            let data = server.read_tensor(bindings).await;
+                            callback.send(data).await.unwrap();
+                        }
                         Message::GetResource(binding, callback) => {
                             let data = server.get_resource(binding);
                             callback.send(data).await.unwrap();
@@ -73,12 +88,20 @@ where
                             let handle = server.create(&data);
                             callback.send(handle).await.unwrap();
                         }
+                        Message::CreateTensor(data, shape, elem_size, callback) => {
+                            let handle = server.create_tensor(&data, &shape, elem_size);
+                            callback.send(handle).await.unwrap();
+                        }
                         Message::Empty(size, callback) => {
                             let handle = server.empty(size);
                             callback.send(handle).await.unwrap();
                         }
-                        Message::ExecuteKernel(kernel, bindings) => unsafe {
-                            server.execute(kernel.0, kernel.1, bindings, kernel.2);
+                        Message::EmptyTensor(shape, elem_size, callback) => {
+                            let handle = server.empty_tensor(&shape, elem_size);
+                            callback.send(handle).await.unwrap();
+                        }
+                        Message::ExecuteKernel(kernel, constants, bindings) => unsafe {
+                            server.execute(kernel.0, kernel.1, constants, bindings, kernel.2);
                         },
                         Message::SyncElapsed(callback) => {
                             let duration = server.sync_elapsed().await;
@@ -91,8 +114,11 @@ where
                         Message::Flush => {
                             server.flush();
                         }
-                        Message::GetMemoryUsage(callback) => {
+                        Message::MemoryUsage(callback) => {
                             callback.send(server.memory_usage()).await.unwrap();
+                        }
+                        Message::MemoryCleanup => {
+                            server.memory_cleanup();
                         }
                         Message::EnableTimestamps => {
                             server.enable_timestamps();
@@ -133,7 +159,20 @@ where
         handle_response(response.recv().await)
     }
 
-    fn get_resource(&self, binding: Binding) -> BindingResource<Server> {
+    async fn read_tensor(&self, bindings: Vec<BindingWithMeta>) -> Vec<Vec<u8>> {
+        let sender = self.state.sender.clone();
+        let (callback, response) = async_channel::unbounded();
+        sender
+            .send(Message::ReadTensor(bindings, callback))
+            .await
+            .unwrap();
+        handle_response(response.recv().await)
+    }
+
+    fn get_resource(
+        &self,
+        binding: Binding,
+    ) -> BindingResource<<Server::Storage as ComputeStorage>::Resource> {
         let (callback, response) = async_channel::unbounded();
 
         self.state
@@ -155,6 +194,27 @@ where
         handle_response(response.recv_blocking())
     }
 
+    fn create_tensor(
+        &self,
+        data: &[u8],
+        shape: &[usize],
+        elem_size: usize,
+    ) -> (Handle, Vec<usize>) {
+        let (callback, response) = async_channel::unbounded();
+
+        self.state
+            .sender
+            .send_blocking(Message::CreateTensor(
+                data.to_vec(),
+                shape.to_vec(),
+                elem_size,
+                callback,
+            ))
+            .unwrap();
+
+        handle_response(response.recv_blocking())
+    }
+
     fn empty(&self, size: usize) -> Handle {
         let (callback, response) = async_channel::unbounded();
         self.state
@@ -165,16 +225,31 @@ where
         handle_response(response.recv_blocking())
     }
 
+    fn empty_tensor(&self, shape: &[usize], elem_size: usize) -> (Handle, Vec<usize>) {
+        let (callback, response) = async_channel::unbounded();
+        self.state
+            .sender
+            .send_blocking(Message::EmptyTensor(shape.to_vec(), elem_size, callback))
+            .unwrap();
+
+        handle_response(response.recv_blocking())
+    }
+
     unsafe fn execute(
         &self,
         kernel: Server::Kernel,
         count: CubeCount,
+        constants: Vec<ConstBinding>,
         bindings: Vec<Binding>,
         kind: ExecutionMode,
     ) {
         self.state
             .sender
-            .send_blocking(Message::ExecuteKernel((kernel, count, kind), bindings))
+            .send_blocking(Message::ExecuteKernel(
+                (kernel, count, kind),
+                constants,
+                bindings,
+            ))
             .unwrap()
     }
 
@@ -206,9 +281,16 @@ where
         let (callback, response) = async_channel::unbounded();
         self.state
             .sender
-            .send_blocking(Message::GetMemoryUsage(callback))
+            .send_blocking(Message::MemoryUsage(callback))
             .unwrap();
         handle_response(response.recv_blocking())
+    }
+
+    fn memory_cleanup(&self) {
+        self.state
+            .sender
+            .send_blocking(Message::MemoryCleanup)
+            .unwrap()
     }
 
     fn enable_timestamps(&self) {

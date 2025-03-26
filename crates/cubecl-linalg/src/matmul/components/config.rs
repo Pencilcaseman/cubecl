@@ -39,6 +39,7 @@ pub trait MatmulConfigFactory: Send + Sync + 'static {
     fn check_config(config: &Self::Config) -> Result<(), InvalidConfigError>;
 
     /// Checks if the client can handle the features used in this computation
+    #[allow(clippy::result_large_err)]
     fn check_availability<R: Runtime, MP: MatmulPrecision>(
         _client: &ComputeClient<R::Server, R::Channel>,
         _config: &Self::Config,
@@ -197,13 +198,5 @@ impl TilingDimensions {
     /// Returns the number of tiles across the column axis of the stage.
     pub fn tile_count_col(&self) -> u32 {
         self.tile_count_col
-    }
-
-    /// Number of elements in a buffer.
-    pub fn buffer_size(&self, ident: InputIdent) -> u32 {
-        match ident {
-            InputIdent::Lhs => self.tile_count_row() * self.tile_size(),
-            InputIdent::Rhs => self.tile_count_col() * self.tile_size(),
-        }
     }
 }

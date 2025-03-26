@@ -27,11 +27,30 @@ pub struct VirtualTensorExpand<E: Numeric, IO> {
     _p: PhantomData<IO>,
 }
 
+impl<E: Numeric, IO: Clone> List<Line<E>> for VirtualTensor<E, IO> {
+    fn __expand_read(
+        scope: &mut Scope,
+        this: VirtualTensorExpand<E, IO>,
+        index: <u32 as CubeType>::ExpandType,
+    ) -> <Line<E> as CubeType>::ExpandType {
+        this.__expand_read_method(scope, index)
+    }
+}
+
+impl<E: Numeric, IO: Clone> ListExpand<Line<E>> for VirtualTensorExpand<E, IO> {
+    fn __expand_read_method(
+        self,
+        scope: &mut Scope,
+        index: <u32 as CubeType>::ExpandType,
+    ) -> <Line<E> as CubeType>::ExpandType {
+        self.state.clone().__expand_read_method(scope, index)
+    }
+}
+
 #[allow(unused, clippy::all)]
 impl<E: Numeric, IO: Clone> VirtualTensor<E, IO> {
-    /// Read the tensor at the given index.
-    pub fn read(&self, index: u32) -> Line<E> {
-        unexpanded!();
+    pub fn as_tensor_map(&self) -> TensorMap<E> {
+        unexpanded!()
     }
     pub fn as_slice(&self, start: u32, end: u32) -> Slice<Line<E>> {
         unexpanded!();
@@ -57,12 +76,11 @@ impl<E: Numeric, IO: Clone> VirtualTensor<E, IO> {
         unexpanded!();
     }
 
-    pub fn __expand_read(
-        scope: &mut Scope,
+    pub fn __expand_as_tensor_map(
+        context: &mut Scope,
         this: <Self as CubeType>::ExpandType,
-        index: <u32 as CubeType>::ExpandType,
-    ) -> <Line<E> as CubeType>::ExpandType {
-        this.__expand_read_method(scope, index)
+    ) -> <TensorMap<E> as CubeType>::ExpandType {
+        this.__expand_as_tensor_map_method(context)
     }
     pub fn __expand_as_slice(
         context: &mut Scope,
@@ -108,16 +126,13 @@ impl<E: Numeric, IO: Clone> VirtualTensor<E, IO> {
 
 #[allow(unused, clippy::all)]
 impl<E: Numeric, IO: Clone> VirtualTensorExpand<E, IO> {
-    pub fn __expand_read_method(
+    pub fn __expand_as_tensor_map_method(
         self,
-        scope: &mut Scope,
-        index: <u32 as CubeType>::ExpandType,
-    ) -> <Line<E> as CubeType>::ExpandType {
-        let _arg_0 = index;
-        self.state
-            .clone()
-            .__expand_read_method(scope, _arg_0.into())
+        context: &mut Scope,
+    ) -> <TensorMap<E> as CubeType>::ExpandType {
+        self.state.clone().__expand_as_tensor_map_method(context)
     }
+
     pub fn __expand_as_slice_method(
         self,
         context: &mut Scope,
@@ -200,46 +215,30 @@ impl<E: Numeric, IO: Clone> VirtualTensor<E, IO> {
     }
 }
 
-#[allow(unused, clippy::all)]
-impl<E: Numeric> VirtualTensor<E, ReadWrite> {
-    #[doc = " Write the tensor at the given index."]
-    pub fn write(&mut self, index: u32, value: Line<E>) {
-        unexpanded!()
-    }
-
-    pub fn __expand_write(
+impl<E: Numeric> ListMut<Line<E>> for VirtualTensor<E, ReadWrite> {
+    fn __expand_write(
         scope: &mut Scope,
-        this: <Self as CubeType>::ExpandType,
+        this: VirtualTensorExpand<E, ReadWrite>,
         index: <u32 as CubeType>::ExpandType,
         value: <Line<E> as CubeType>::ExpandType,
     ) -> <() as CubeType>::ExpandType {
         this.__expand_write_method(scope, index, value)
     }
 }
-impl<E: Numeric> VirtualTensorExpand<E, ReadWrite> {
-    pub fn __expand_write_method(
+
+impl<E: Numeric> ListMutExpand<Line<E>> for VirtualTensorExpand<E, ReadWrite> {
+    fn __expand_write_method(
         self,
         scope: &mut Scope,
         index: <u32 as CubeType>::ExpandType,
         value: <Line<E> as CubeType>::ExpandType,
     ) -> <() as CubeType>::ExpandType {
-        let _arg_0 = index;
-        let _arg_1 = value;
-
         self.state
             .clone()
-            .__expand_write_method(scope, _arg_0, _arg_1)
-    }
-
-    pub fn __expand_write(
-        scope: &mut Scope,
-        this: Self,
-        index: <u32 as CubeType>::ExpandType,
-        value: <Line<E> as CubeType>::ExpandType,
-    ) -> <() as CubeType>::ExpandType {
-        VirtualTensor::<E, ReadWrite>::__expand_write(scope, this, index, value)
+            .__expand_write_method(scope, index, value)
     }
 }
+
 impl<E: Numeric> VirtualTensor<E, Read> {
     /// Create a new [read only](Read) [virtual tensor](VirtualTensor).
     pub fn new<V: VirtualTensorOperations<E> + 'static>(_v: &V) -> Self {
@@ -318,6 +317,7 @@ pub trait VirtualTensorOperations<E: Numeric> {
 /// For now this needs to be manually implemented for any type that needs to become a virtual
 /// tensor.
 pub trait VirtualTensorOperationsExpand<E: Numeric> {
+    fn __expand_as_tensor_map_method(&self, scope: &mut Scope) -> ExpandElementTyped<TensorMap<E>>;
     fn __expand_read_method(
         &self,
         scope: &mut Scope,
@@ -365,12 +365,6 @@ mod __cube_type {
     }
 
     impl<E: Numeric, IO> CubeDebug for VirtualTensorExpand<E, IO> {}
-
-    impl<E: Numeric, IO: Clone> IntoRuntime for VirtualTensor<E, IO> {
-        fn __expand_runtime_method(self, _scope: &mut Scope) -> Self::ExpandType {
-            panic!("Virtual tensors don't exist at comptime.")
-        }
-    }
 }
 
 /// Enable tensors to be virtual.
@@ -429,6 +423,79 @@ mod __tensor {
         }
         fn __expand_buffer_len_method(&self, scope: &mut Scope) -> ExpandElementTyped<u32> {
             self.clone().__expand_buffer_len_method(scope)
+        }
+
+        fn __expand_as_tensor_map_method(
+            &self,
+            _scope: &mut Scope,
+        ) -> ExpandElementTyped<TensorMap<E>> {
+            unimplemented!("Can't turn normal tensor into `TensorMap`");
+        }
+    }
+}
+
+/// Enable tensor maps to be virtual.
+mod __tensor_map {
+    use super::*;
+
+    impl<E: Numeric> VirtualTensorOperations<E> for TensorMap<E> {}
+    impl<E: Numeric> VirtualTensorOperationsExpand<E> for ExpandElementTyped<TensorMap<E>> {
+        fn __expand_read_method(
+            &self,
+            _scope: &mut Scope,
+            _index: ExpandElementTyped<u32>,
+        ) -> ExpandElementTyped<Line<E>> {
+            todo!()
+        }
+        fn __expand_read_window_method(
+            &self,
+            _context: &mut Scope,
+            _start: ExpandElementTyped<u32>,
+            _end: ExpandElementTyped<u32>,
+        ) -> ExpandElementTyped<Slice<Line<E>>> {
+            todo!()
+        }
+
+        fn __expand_write_method(
+            &self,
+            _scope: &mut Scope,
+            _index: ExpandElementTyped<u32>,
+            _value: ExpandElementTyped<Line<E>>,
+        ) {
+            todo!()
+        }
+
+        fn __expand_shape_method(
+            &self,
+            _scope: &mut Scope,
+            _axis: ExpandElementTyped<u32>,
+        ) -> ExpandElementTyped<u32> {
+            todo!()
+        }
+
+        fn __expand_stride_method(
+            &self,
+            _scope: &mut Scope,
+            _axis: ExpandElementTyped<u32>,
+        ) -> ExpandElementTyped<u32> {
+            todo!()
+        }
+
+        fn __expand_rank_method(&self, _scope: &mut Scope) -> ExpandElementTyped<u32> {
+            todo!()
+        }
+        fn __expand_len_method(&self, _scope: &mut Scope) -> ExpandElementTyped<u32> {
+            todo!()
+        }
+        fn __expand_buffer_len_method(&self, _scope: &mut Scope) -> ExpandElementTyped<u32> {
+            todo!()
+        }
+
+        fn __expand_as_tensor_map_method(
+            &self,
+            _scope: &mut Scope,
+        ) -> ExpandElementTyped<TensorMap<E>> {
+            self.clone()
         }
     }
 }

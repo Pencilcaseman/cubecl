@@ -3,8 +3,9 @@ use cubecl_core::prelude::*;
 use cubecl_std::tensor::r#virtual::ReadWrite;
 use cubecl_std::tensor::r#virtual::VirtualTensor;
 
-use crate::instructions::*;
+use crate::BoundChecksInner;
 use crate::LineMode;
+use crate::instructions::*;
 
 /// A simple range to specify how to iterate a slice when performing a reduction.
 #[derive(CubeType)]
@@ -94,22 +95,27 @@ impl ReduceRange {
 /// Since each individual unit performs a reduction, this function is meant to be called
 /// with either a different `items` for each unit, a different `range` or both based on ABSOLUTE_UNIT_POS.
 #[cube]
-pub fn reduce_slice<N: Numeric, R: ReduceInstruction<N>>(
-    items: &VirtualTensor<N>,
+pub fn reduce_slice<N: Numeric, I: List<Line<N>>, R: ReduceInstruction<N>>(
+    items: &I,
     range: ReduceRange,
     #[comptime] line_size: u32,
     #[comptime] line_mode: LineMode,
 ) -> R::AccumulatorItem {
     let mut accumulator = R::null_accumulator(line_size);
-
     let mut index = range.start;
     let mut coordinate = 0;
+
     while index < range.end {
-        let coordinates = fill_coordinate_line(coordinate, line_size, line_mode);
+        let coordinates = if R::REQUIRES_COORDINATE {
+            ReduceCoordinate::new_Required(fill_coordinate_line(coordinate, line_size, line_mode))
+        } else {
+            ReduceCoordinate::new_NotRequired()
+        };
         reduce_inplace::<N, R>(&mut accumulator, items.read(index), coordinates, false);
         index += range.step;
         coordinate += 1;
     }
+
     accumulator
 }
 
@@ -126,25 +132,44 @@ pub fn reduce_slice<N: Numeric, R: ReduceInstruction<N>>(
 /// with either a different `items` for each plane, a different `range` or both based on
 /// the absolute plane position (`CUBE_POS * CUBE_DIM_Y + UNIT_POS_Y`).
 #[cube]
-pub fn reduce_slice_plane<N: Numeric, R: ReduceInstruction<N>>(
-    items: &VirtualTensor<N>,
+pub fn reduce_slice_plane<N: Numeric, I: List<Line<N>>, R: ReduceInstruction<N>>(
+    items: &I,
     range: ReduceRange,
     #[comptime] line_size: u32,
     #[comptime] line_mode: LineMode,
+    #[comptime] bound_checks: BoundChecksInner,
 ) -> R::AccumulatorItem {
     let mut accumulator = R::null_accumulator(line_size);
 
     let mut first_index = range.start;
     let mut first_coordinate = 0;
     while first_index < range.end {
-        let coordinates = fill_coordinate_line(first_coordinate + UNIT_POS_X, line_size, line_mode);
+        let coordinates = if R::REQUIRES_COORDINATE {
+            ReduceCoordinate::new_Required(fill_coordinate_line(
+                first_coordinate + UNIT_POS_X,
+                line_size,
+                line_mode,
+            ))
+        } else {
+            ReduceCoordinate::new_NotRequired()
+        };
 
         let index = first_index + UNIT_POS_X * range.step;
-        let item = select(
-            index < range.end,
-            items.read(index),
-            R::null_input(line_size),
-        );
+        let item = match bound_checks {
+            BoundChecksInner::None => items.read(index),
+            BoundChecksInner::Mask => select(
+                index < range.end,
+                items.read(index),
+                R::null_input(line_size),
+            ),
+            BoundChecksInner::Branch => {
+                if index < range.end {
+                    items.read(index)
+                } else {
+                    R::null_input(line_size)
+                }
+            }
+        };
 
         reduce_inplace::<N, R>(&mut accumulator, item, coordinates, true);
 
@@ -168,13 +193,14 @@ pub fn reduce_slice_plane<N: Numeric, R: ReduceInstruction<N>>(
 /// Since each individual cube performs a reduction, this function is meant to be called
 /// with either a different `items` for each cube, a different `range` or both based on `CUBE_POS`.
 #[cube]
-pub fn reduce_slice_shared<N: Numeric, R: ReduceInstruction<N>>(
-    items: &VirtualTensor<N>,
+pub fn reduce_slice_shared<N: Numeric, I: List<Line<N>>, R: ReduceInstruction<N>>(
+    items: &I,
     range: ReduceRange,
     #[comptime] accumulator_size: u32,
     #[comptime] line_size: u32,
     #[comptime] line_mode: LineMode,
     #[comptime] use_planes: bool,
+    #[comptime] bound_checks: BoundChecksInner,
 ) -> R::SharedAccumulator {
     // The index used to read and write into the accumulator.
     let accumulator_index = if use_planes { UNIT_POS_Y } else { UNIT_POS };
@@ -191,22 +217,41 @@ pub fn reduce_slice_shared<N: Numeric, R: ReduceInstruction<N>>(
     let mut first_coordinate = 0;
     while first_index < range.end {
         let index = first_index + UNIT_POS * range.step;
-        let item = select(
-            index < range.end,
-            items.read(index),
-            R::null_input(line_size),
-        );
-        let coordinate = fill_coordinate_line(first_coordinate + UNIT_POS, line_size, line_mode);
-        let coordinate = select(
-            index < range.end,
-            coordinate,
-            Line::empty(line_size).fill(u32::MAX),
-        );
+        let item = match bound_checks {
+            BoundChecksInner::None => items.read(index),
+            BoundChecksInner::Mask => select(
+                index < range.end,
+                items.read(index),
+                R::null_input(line_size),
+            ),
+            BoundChecksInner::Branch => {
+                if index < range.end {
+                    items.read(index)
+                } else {
+                    R::null_input(line_size)
+                }
+            }
+        };
+
+        let coordinates = if R::REQUIRES_COORDINATE {
+            let coordinate =
+                fill_coordinate_line(first_coordinate + UNIT_POS, line_size, line_mode);
+            let coordinate = select(
+                index < range.end,
+                coordinate,
+                Line::empty(line_size).fill(u32::MAX),
+            );
+
+            ReduceCoordinate::new_Required(coordinate)
+        } else {
+            ReduceCoordinate::new_NotRequired()
+        };
+
         reduce_shared_inplace::<N, R>(
             &mut accumulator,
             accumulator_index,
             item,
-            coordinate,
+            coordinates,
             use_planes,
         );
         first_index += range.step * CUBE_DIM;
@@ -299,6 +344,7 @@ pub fn reduce_tree<In: Numeric, Inst: ReduceInstruction<In>>(
 }
 
 #[cube]
+#[allow(unknown_lints)] // `manual_div_ceil` only appeared in 1.83
 #[allow(clippy::manual_div_ceil)]
 fn div_ceil(a: u32, b: u32) -> u32 {
     (a + b - 1) / b

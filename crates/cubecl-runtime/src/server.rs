@@ -1,13 +1,15 @@
 use crate::{
     memory_management::{
-        memory_pool::{SliceBinding, SliceHandle},
         MemoryHandle, MemoryUsage,
+        memory_pool::{SliceBinding, SliceHandle},
     },
     storage::{BindingResource, ComputeStorage},
+    tma::{OobFill, TensorMapFormat, TensorMapInterleave, TensorMapPrefetch, TensorMapSwizzle},
 };
 use alloc::vec::Vec;
 use core::{fmt::Debug, future::Future};
-use cubecl_common::{benchmark::TimestampsResult, ExecutionMode};
+use cubecl_common::{ExecutionMode, benchmark::TimestampsResult};
+use cubecl_ir::Elem;
 
 /// The compute server is responsible for handling resources and computations over resources.
 ///
@@ -19,6 +21,8 @@ where
 {
     /// The kernel type defines the computation algorithms.
     type Kernel: Send;
+    /// Information that can be retrieved for the runtime.
+    type Info: Debug + Send + Sync;
     /// The [storage](ComputeStorage) type defines how data is stored and accessed.
     type Storage: ComputeStorage;
     /// The type of the features supported by the server.
@@ -30,14 +34,38 @@ where
         bindings: Vec<Binding>,
     ) -> impl Future<Output = Vec<Vec<u8>>> + Send + 'static;
 
+    /// Given tensor handles, returns the owned resources as bytes.
+    fn read_tensor(
+        &mut self,
+        bindings: Vec<BindingWithMeta>,
+    ) -> impl Future<Output = Vec<Vec<u8>>> + Send + 'static;
+
     /// Given a resource handle, returns the storage resource.
-    fn get_resource(&mut self, binding: Binding) -> BindingResource<Self>;
+    fn get_resource(
+        &mut self,
+        binding: Binding,
+    ) -> BindingResource<<Self::Storage as ComputeStorage>::Resource>;
 
     /// Given a resource as bytes, stores it and returns the memory handle.
     fn create(&mut self, data: &[u8]) -> Handle;
 
+    /// Given a resource as bytes with `shape`, stores it and returns the tensor handle.
+    /// May or may not be contiguous, depending on what's best for the given runtime. Always use
+    /// strides to index.
+    /// For example, in CUDA, this will allocate a padded tensor where the last dimension is padded
+    /// to the cache lines, so row access is faster.
+    fn create_tensor(
+        &mut self,
+        data: &[u8],
+        shape: &[usize],
+        elem_size: usize,
+    ) -> (Handle, Vec<usize>);
+
     /// Reserves `size` bytes in the storage, and returns a handle over them.
     fn empty(&mut self, size: usize) -> Handle;
+
+    /// Reserves `shape` bytes in the storage, and returns a handle to it.
+    fn empty_tensor(&mut self, shape: &[usize], elem_size: usize) -> (Handle, Vec<usize>);
 
     /// Executes the `kernel` over the given memory `handles`.
     ///
@@ -51,6 +79,7 @@ where
         &mut self,
         kernel: Self::Kernel,
         count: CubeCount,
+        constants: Vec<ConstBinding>,
         bindings: Vec<Binding>,
         kind: ExecutionMode,
     );
@@ -68,6 +97,9 @@ where
 
     /// The current memory usage of the server.
     fn memory_usage(&self) -> MemoryUsage;
+
+    /// Ask the server to release memory that it can release.
+    fn memory_cleanup(&mut self);
 
     /// Enable collecting timestamps.
     fn enable_timestamps(&mut self);
@@ -128,6 +160,56 @@ pub struct Binding {
     pub offset_end: Option<u64>,
 }
 
+/// A binding with shape and stride info for non-contiguous reading
+#[derive(new, Debug)]
+pub struct BindingWithMeta {
+    /// Binding for the memory resource
+    pub binding: Binding,
+    /// Shape of the resource
+    pub shape: Vec<usize>,
+    /// Strides of the resource
+    pub strides: Vec<usize>,
+    /// Size of each element in the resource
+    pub elem_size: usize,
+}
+
+/// Binding of a grid constant to execute a kernel.
+#[derive(new, Debug, Clone)]
+pub enum ConstBinding {
+    /// A tensor map used for TMA loading ops
+    TensorMap {
+        /// The binding for the backing tensor
+        binding: Binding,
+        /// The tensormap metadata
+        map: TensorMapMeta,
+    },
+}
+
+/// TensorMap metadata for the opaque proxy used in TMA copies
+#[derive(Debug, Clone)]
+pub struct TensorMapMeta {
+    /// Tensormap format (tiled or im2col)
+    pub format: TensorMapFormat,
+    /// Rank of the backing tensor
+    pub rank: usize,
+    /// Shape of the backing tensor
+    pub shape: Vec<usize>,
+    /// Strides of the backing tensor
+    pub strides: Vec<usize>,
+    /// Element stride, usually 1 but may be 2 for complex tensors
+    pub elem_stride: Vec<usize>,
+    /// Interleave mode
+    pub interleave: TensorMapInterleave,
+    /// Swizzle mode
+    pub swizzle: TensorMapSwizzle,
+    /// Prefetch settings
+    pub prefetch: TensorMapPrefetch,
+    /// OOB fill value
+    pub oob_fill: OobFill,
+    /// Element type
+    pub elem: Elem,
+}
+
 impl Handle {
     /// If the tensor handle can be reused inplace.
     pub fn can_mut(&self) -> bool {
@@ -142,6 +224,21 @@ impl Handle {
             memory: MemoryHandle::binding(self.memory),
             offset_start: self.offset_start,
             offset_end: self.offset_end,
+        }
+    }
+
+    /// Convert the [handle](Handle) into a [binding](Binding) with shape and stride metadata.
+    pub fn binding_with_meta(
+        self,
+        shape: Vec<usize>,
+        strides: Vec<usize>,
+        elem_size: usize,
+    ) -> BindingWithMeta {
+        BindingWithMeta {
+            shape,
+            strides,
+            elem_size,
+            binding: self.binding(),
         }
     }
 }
@@ -170,6 +267,7 @@ impl Clone for Binding {
 /// Specifieds the number of cubes to be dispatched for a kernel.
 ///
 /// This translates to eg. a grid for CUDA, or to num_workgroups for wgsl.
+#[allow(clippy::large_enum_variant)]
 pub enum CubeCount {
     /// Dispatch a known count of x, y, z cubes.
     Static(u32, u32, u32),

@@ -1,9 +1,9 @@
 use super::ComputeChannel;
-use crate::server::{Binding, ComputeServer, CubeCount, Handle};
-use crate::storage::BindingResource;
+use crate::server::{Binding, BindingWithMeta, ComputeServer, ConstBinding, CubeCount, Handle};
+use crate::storage::{BindingResource, ComputeStorage};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use cubecl_common::{benchmark::TimestampsResult, ExecutionMode};
+use cubecl_common::{ExecutionMode, benchmark::TimestampsResult};
 
 /// A channel using a [ref cell](core::cell::RefCell) to access the server with mutability.
 ///
@@ -51,7 +51,18 @@ where
         future.await
     }
 
-    fn get_resource(&self, binding: Binding) -> BindingResource<Server> {
+    async fn read_tensor(&self, bindings: Vec<BindingWithMeta>) -> Vec<Vec<u8>> {
+        let future = {
+            let mut server = self.server.borrow_mut();
+            server.read_tensor(bindings)
+        };
+        future.await
+    }
+
+    fn get_resource(
+        &self,
+        binding: Binding,
+    ) -> BindingResource<<Server::Storage as ComputeStorage>::Resource> {
         self.server.borrow_mut().get_resource(binding)
     }
 
@@ -59,20 +70,38 @@ where
         self.server.borrow_mut().create(resource)
     }
 
+    fn create_tensor(
+        &self,
+        data: &[u8],
+        shape: &[usize],
+        elem_size: usize,
+    ) -> (Handle, Vec<usize>) {
+        self.server
+            .borrow_mut()
+            .create_tensor(data, shape, elem_size)
+    }
+
     fn empty(&self, size: usize) -> Handle {
         self.server.borrow_mut().empty(size)
+    }
+
+    fn empty_tensor(&self, shape: &[usize], elem_size: usize) -> (Handle, Vec<usize>) {
+        self.server.borrow_mut().empty_tensor(shape, elem_size)
     }
 
     unsafe fn execute(
         &self,
         kernel_description: Server::Kernel,
         count: CubeCount,
+        constants: Vec<ConstBinding>,
         bindings: Vec<Binding>,
         kind: ExecutionMode,
     ) {
-        self.server
-            .borrow_mut()
-            .execute(kernel_description, count, bindings, kind)
+        unsafe {
+            self.server
+                .borrow_mut()
+                .execute(kernel_description, count, constants, bindings, kind)
+        }
     }
 
     fn flush(&self) {
@@ -97,6 +126,10 @@ where
 
     fn memory_usage(&self) -> crate::memory_management::MemoryUsage {
         self.server.borrow_mut().memory_usage()
+    }
+
+    fn memory_cleanup(&self) {
+        self.server.borrow_mut().memory_cleanup();
     }
 
     fn enable_timestamps(&self) {
