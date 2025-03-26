@@ -5,8 +5,8 @@ use hashbrown::{HashMap, HashSet};
 use crate::{BarrierLevel, CubeFnSource, ExpandElement, Matrix, SourceLoc, TypeHash};
 
 use super::{
-    processing::ScopeProcessing, Allocator, Elem, Id, Instruction, Item, Operation, UIntKind,
-    Variable, VariableKind,
+    Allocator, Elem, Id, Instruction, Item, Operation, UIntKind, Variable, VariableKind,
+    processing::ScopeProcessing,
 };
 
 /// The scope is the main [operation](Operation) and [variable](Variable) container that simplify
@@ -379,6 +379,7 @@ impl Scope {
         &mut self,
         item: I,
         shared_memory_size: u32,
+        alignment: Option<u32>,
     ) -> ExpandElement {
         let item = item.into();
         let index = self.new_local_index();
@@ -386,6 +387,7 @@ impl Scope {
             VariableKind::SharedMemory {
                 id: index,
                 length: shared_memory_size,
+                alignment,
             },
             item,
         );

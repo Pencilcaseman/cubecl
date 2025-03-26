@@ -1,20 +1,21 @@
 use std::marker::PhantomData;
 
-use crate::prelude::{ArrayArg, TensorArg};
 use crate::KernelSettings;
-use crate::{compute::KernelTask, ir::UIntKind};
-use crate::{
-    ir::{Elem, FloatKind, IntKind},
-    MetadataBuilder,
-};
+use crate::prelude::{ArrayArg, TensorArg, TensorMapArg};
 use crate::{Kernel, Runtime};
+use crate::{
+    MetadataBuilder,
+    ir::{Elem, FloatKind, IntKind},
+};
+use crate::{compute::KernelTask, ir::UIntKind};
 use bytemuck::NoUninit;
 use cubecl_runtime::client::ComputeClient;
-use cubecl_runtime::server::{Binding, CubeCount};
+use cubecl_runtime::server::{Binding, ConstBinding, CubeCount};
 
 /// Prepare a kernel for [launch](KernelLauncher::launch).
 pub struct KernelLauncher<R: Runtime> {
     tensors: TensorState<R>,
+    constants: ConstantState<R>,
     scalar_bf16: ScalarState<half::bf16>,
     scalar_f16: ScalarState<half::f16>,
     scalar_f32: ScalarState<f32>,
@@ -36,6 +37,11 @@ impl<R: Runtime> KernelLauncher<R> {
     /// Register a tensor to be launched.
     pub fn register_tensor(&mut self, tensor: &TensorArg<'_, R>) {
         self.tensors.push_tensor(tensor);
+    }
+
+    /// Register a mapped tensor to be launched.
+    pub fn register_tensor_map(&mut self, tensor: &TensorMapArg<'_, R>) {
+        self.constants.push_tensor_map(tensor);
     }
 
     /// Register an array to be launched.
@@ -122,11 +128,11 @@ impl<R: Runtime> KernelLauncher<R> {
         kernel: K,
         client: &ComputeClient<R::Server, R::Channel>,
     ) {
-        let bindings = self.into_bindings(client);
+        let (constants, bindings) = self.into_bindings(client);
 
         let kernel = Box::new(KernelTask::<R::Compiler, K>::new(kernel));
 
-        client.execute(kernel, cube_count, bindings);
+        client.execute(kernel, cube_count, constants, bindings);
     }
 
     /// Launch the kernel without check bounds.
@@ -143,11 +149,13 @@ impl<R: Runtime> KernelLauncher<R> {
         kernel: K,
         client: &ComputeClient<R::Server, R::Channel>,
     ) {
-        let bindings = self.into_bindings(client);
+        unsafe {
+            let (constants, bindings) = self.into_bindings(client);
 
-        let kernel = Box::new(KernelTask::<R::Compiler, K>::new(kernel));
+            let kernel = Box::new(KernelTask::<R::Compiler, K>::new(kernel));
 
-        client.execute_unchecked(kernel, cube_count, bindings);
+            client.execute_unchecked(kernel, cube_count, constants, bindings);
+        }
     }
 
     /// We need to create the bindings in the same order they are defined in the compilation step.
@@ -156,7 +164,14 @@ impl<R: Runtime> KernelLauncher<R> {
     /// by the output tensors. Then the tensor metadata, and the scalars at the end. The scalars
     /// are registered in the same order they are added. This is why we store the scalar data type
     /// in the `scalar_order` vector, so that we can register them in the same order.
-    fn into_bindings(mut self, client: &ComputeClient<R::Server, R::Channel>) -> Vec<Binding> {
+    ///
+    /// Also returns an ordered list of constant bindings. The ordering between constants and tensors
+    /// is up to the runtime.
+    fn into_bindings(
+        mut self,
+        client: &ComputeClient<R::Server, R::Channel>,
+    ) -> (Vec<ConstBinding>, Vec<Binding>) {
+        let constants = self.constants.bindings();
         let mut bindings = Vec::new();
 
         self.tensors.register(client, &mut bindings);
@@ -193,7 +208,7 @@ impl<R: Runtime> KernelLauncher<R> {
             }
         }
 
-        bindings
+        (constants, bindings)
     }
 
     fn register_scalar(&mut self, elem: Elem) {
@@ -223,6 +238,38 @@ pub enum ScalarState<T> {
     Empty,
     /// The registered scalars.
     Some(Vec<T>),
+}
+
+pub struct ConstantState<R: Runtime> {
+    bindings: Vec<ConstBinding>,
+    _ty: PhantomData<R>,
+}
+
+impl<R: Runtime> Default for ConstantState<R> {
+    fn default() -> Self {
+        Self {
+            bindings: Default::default(),
+            _ty: PhantomData,
+        }
+    }
+}
+
+impl<R: Runtime> ConstantState<R> {
+    /// Push a new tensor to the state.
+    pub fn push_tensor_map(&mut self, map: &TensorMapArg<'_, R>) {
+        let tensor = match &map.tensor {
+            TensorArg::Handle { handle, .. } => handle,
+            TensorArg::Alias { .. } => panic!("Can't use aliased tensor for tensor map"),
+        };
+
+        let binding = tensor.handle.clone().binding();
+        let map = map.metadata.clone();
+        self.bindings.push(ConstBinding::TensorMap { binding, map });
+    }
+
+    fn bindings(&self) -> Vec<ConstBinding> {
+        self.bindings.clone()
+    }
 }
 
 impl<R: Runtime> TensorState<R> {
@@ -312,6 +359,8 @@ impl<R: Runtime> TensorState<R> {
 
             bindings_global.extend(bindings);
             bindings_global.push(client.create(bytemuck::cast_slice(&metadata)).binding());
+        } else {
+            bindings_global.push(client.create(&[0]).binding());
         }
     }
 }
@@ -344,6 +393,7 @@ impl<R: Runtime> Default for KernelLauncher<R> {
     fn default() -> Self {
         Self {
             tensors: TensorState::Empty,
+            constants: ConstantState::default(),
             scalar_bf16: ScalarState::Empty,
             scalar_f16: ScalarState::Empty,
             scalar_f32: ScalarState::Empty,

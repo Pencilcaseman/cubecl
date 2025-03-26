@@ -1,9 +1,9 @@
 use std::{marker::PhantomData, num::NonZero};
 
 use crate::{
-    frontend::{indexation::Index, CubePrimitive, CubeType, ExpandElementTyped, Init, IntoRuntime},
+    frontend::{CubePrimitive, CubeType, ExpandElementTyped, Init, indexation::Index},
     ir::{Item, Scope},
-    prelude::Line,
+    prelude::{Line, List, ListExpand, ListMut, ListMutExpand, index, index_assign},
 };
 
 #[derive(Clone, Copy)]
@@ -14,12 +14,6 @@ pub struct SharedMemory<T: CubeType> {
 impl<T: CubePrimitive> Init for ExpandElementTyped<SharedMemory<T>> {
     fn init(self, _scope: &mut Scope) -> Self {
         self
-    }
-}
-
-impl<T: CubePrimitive> IntoRuntime for SharedMemory<T> {
-    fn __expand_runtime_method(self, _scope: &mut Scope) -> ExpandElementTyped<Self> {
-        unimplemented!("Shared memory can't exist at comptime");
     }
 }
 
@@ -36,6 +30,14 @@ impl<T: CubePrimitive + Clone> SharedMemory<T> {
         SharedMemory { _val: PhantomData }
     }
 
+    pub fn new_aligned<S: Index>(
+        _size: S,
+        _vectorization_factor: u32,
+        _alignment: u32,
+    ) -> SharedMemory<Line<T>> {
+        SharedMemory { _val: PhantomData }
+    }
+
     pub fn __expand_new_lined(
         scope: &mut Scope,
         size: ExpandElementTyped<u32>,
@@ -48,9 +50,29 @@ impl<T: CubePrimitive + Clone> SharedMemory<T> {
         let var = scope.create_shared(
             Item::vectorized(T::as_elem(scope), NonZero::new(vectorization_factor as u8)),
             size,
+            None,
         );
         ExpandElementTyped::new(var)
     }
+
+    pub fn __expand_new_aligned(
+        scope: &mut Scope,
+        size: ExpandElementTyped<u32>,
+        vectorization_factor: u32,
+        alignment: u32,
+    ) -> <SharedMemory<Line<T>> as CubeType>::ExpandType {
+        let size = size
+            .constant()
+            .expect("Shared memory need constant initialization value")
+            .as_u32();
+        let var = scope.create_shared(
+            Item::vectorized(T::as_elem(scope), NonZero::new(vectorization_factor as u8)),
+            size,
+            Some(alignment),
+        );
+        ExpandElementTyped::new(var)
+    }
+
     pub fn vectorized<S: Index>(_size: S, _vectorization_factor: u32) -> Self {
         SharedMemory { _val: PhantomData }
     }
@@ -67,6 +89,7 @@ impl<T: CubePrimitive + Clone> SharedMemory<T> {
         let var = scope.create_shared(
             Item::vectorized(T::as_elem(scope), NonZero::new(vectorization_factor as u8)),
             size,
+            None,
         );
         ExpandElementTyped::new(var)
     }
@@ -79,7 +102,7 @@ impl<T: CubePrimitive + Clone> SharedMemory<T> {
             .constant()
             .expect("Shared memory need constant initialization value")
             .as_u32();
-        let var = scope.create_shared(Item::new(T::as_elem(scope)), size);
+        let var = scope.create_shared(Item::new(T::as_elem(scope)), size, None);
         ExpandElementTyped::new(var)
     }
 }
@@ -153,5 +176,47 @@ mod indexation {
                 *self.expand,
             ));
         }
+    }
+}
+
+impl<T: CubePrimitive> List<T> for SharedMemory<T> {
+    fn __expand_read(
+        scope: &mut Scope,
+        this: ExpandElementTyped<SharedMemory<T>>,
+        idx: ExpandElementTyped<u32>,
+    ) -> ExpandElementTyped<T> {
+        index::expand(scope, this, idx)
+    }
+}
+
+impl<T: CubePrimitive> ListExpand<T> for ExpandElementTyped<SharedMemory<T>> {
+    fn __expand_read_method(
+        self,
+        scope: &mut Scope,
+        idx: ExpandElementTyped<u32>,
+    ) -> ExpandElementTyped<T> {
+        index::expand(scope, self, idx)
+    }
+}
+
+impl<T: CubePrimitive> ListMut<T> for SharedMemory<T> {
+    fn __expand_write(
+        scope: &mut Scope,
+        this: ExpandElementTyped<SharedMemory<T>>,
+        idx: ExpandElementTyped<u32>,
+        value: ExpandElementTyped<T>,
+    ) {
+        index_assign::expand(scope, this, idx, value);
+    }
+}
+
+impl<T: CubePrimitive> ListMutExpand<T> for ExpandElementTyped<SharedMemory<T>> {
+    fn __expand_write_method(
+        self,
+        scope: &mut Scope,
+        idx: ExpandElementTyped<u32>,
+        value: ExpandElementTyped<T>,
+    ) {
+        index_assign::expand(scope, self, idx, value);
     }
 }

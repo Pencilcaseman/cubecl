@@ -5,19 +5,19 @@ use crate::runtime::HipCompiler;
 
 use super::fence::{Fence, SyncStream};
 use super::storage::HipStorage;
-use super::{uninit_vec, HipResource};
-use cubecl_core::compute::DebugInformation;
+use super::{HipResource, uninit_vec};
 use cubecl_core::Feature;
-use cubecl_core::{prelude::*, KernelId};
-use cubecl_hip_sys::{hiprtcResult_HIPRTC_SUCCESS, HIP_SUCCESS};
+use cubecl_core::compute::DebugInformation;
+use cubecl_core::{KernelId, prelude::*};
+use cubecl_hip_sys::{HIP_SUCCESS, hiprtcResult_HIPRTC_SUCCESS};
 use cubecl_runtime::debug::{DebugLogger, ProfileLevel};
 use cubecl_runtime::memory_management::MemoryUsage;
 use cubecl_runtime::storage::BindingResource;
+use cubecl_runtime::{TimestampsError, TimestampsResult};
 use cubecl_runtime::{
     memory_management::MemoryManagement,
     server::{self, ComputeServer},
 };
-use cubecl_runtime::{TimestampsError, TimestampsResult};
 use std::collections::HashMap;
 use std::ffi::CStr;
 use std::ffi::CString;
@@ -146,6 +146,7 @@ impl ComputeServer for HipServer {
     type Kernel = Box<dyn CubeTask<HipCompiler>>;
     type Storage = HipStorage;
     type Feature = Feature;
+    type Info = ();
 
     fn read(
         &mut self,
@@ -154,8 +155,21 @@ impl ComputeServer for HipServer {
         self.read_async(bindings)
     }
 
+    fn read_tensor(
+        &mut self,
+        bindings: Vec<server::BindingWithMeta>,
+    ) -> impl Future<Output = Vec<Vec<u8>>> + 'static {
+        let bindings = bindings.into_iter().map(|it| it.binding).collect();
+        self.read_async(bindings)
+    }
+
     fn memory_usage(&self) -> MemoryUsage {
         self.ctx.memory_usage()
+    }
+
+    fn memory_cleanup(&mut self) {
+        let ctx = self.get_context();
+        ctx.memory_management.cleanup(true);
     }
 
     fn create(&mut self, data: &[u8]) -> server::Handle {
@@ -180,16 +194,35 @@ impl ComputeServer for HipServer {
         handle
     }
 
+    fn create_tensor(
+        &mut self,
+        data: &[u8],
+        shape: &[usize],
+        _elem_size: usize,
+    ) -> (server::Handle, Vec<usize>) {
+        let strides = contiguous_strides(shape);
+        let handle = self.create(data);
+        (handle, strides)
+    }
+
     fn empty(&mut self, size: usize) -> server::Handle {
         let ctx = self.get_context();
-        let handle = ctx.memory_management.reserve(size as u64);
+        let handle = ctx.memory_management.reserve(size as u64, None);
         server::Handle::new(handle, None, None, size as u64)
+    }
+
+    fn empty_tensor(&mut self, shape: &[usize], elem_size: usize) -> (server::Handle, Vec<usize>) {
+        let strides = contiguous_strides(shape);
+        let size = shape.iter().product::<usize>() * elem_size;
+        let handle = self.empty(size);
+        (handle, strides)
     }
 
     unsafe fn execute(
         &mut self,
         kernel: Self::Kernel,
         count: CubeCount,
+        constants: Vec<server::ConstBinding>,
         bindings: Vec<server::Binding>,
         mode: ExecutionMode,
     ) {
@@ -225,6 +258,14 @@ impl ComputeServer for HipServer {
             ctx.compile_kernel(&kernel_id, kernel, logger, mode);
         }
 
+        let _ = constants
+            .iter()
+            .map(|it| match it {
+                server::ConstBinding::TensorMap { .. } => {
+                    panic!("TensorMap not supported in ROCm")
+                }
+            })
+            .collect::<Vec<()>>();
         let resources = bindings
             .into_iter()
             .map(|binding| {
@@ -286,7 +327,7 @@ impl ComputeServer for HipServer {
         async move { duration }
     }
 
-    fn get_resource(&mut self, binding: server::Binding) -> BindingResource<Self> {
+    fn get_resource(&mut self, binding: server::Binding) -> BindingResource<HipResource> {
         let ctx = self.get_context();
         BindingResource::new(
             binding.clone(),
@@ -556,4 +597,13 @@ fn hip_path() -> Option<PathBuf> {
     }
     // Default path (only Linux is supported for now)
     Some(PathBuf::from("/opt/rocm"))
+}
+
+fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
+    let rank = shape.len();
+    let mut strides = vec![1; rank];
+    for i in (0..rank - 1).rev() {
+        strides[i] = strides[i + 1] * shape[i + 1];
+    }
+    strides
 }

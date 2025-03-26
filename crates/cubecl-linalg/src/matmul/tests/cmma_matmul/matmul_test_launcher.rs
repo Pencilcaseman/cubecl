@@ -1,9 +1,7 @@
 use cubecl_core::prelude::*;
-use cubecl_core::server::Handle;
 use cubecl_core::tensor_line_size_parallel;
-use cubecl_core::CubeElement;
+use cubecl_core::{CubeElement, server};
 
-use crate::matmul::components::global::args::TensorInputsLaunch;
 use crate::matmul::components::Ident;
 use crate::matmul::components::MatmulConfigFactory;
 use crate::matmul::components::MatmulLaunch;
@@ -11,12 +9,13 @@ use crate::matmul::components::MatmulProblem;
 use crate::matmul::components::MatmulSelection;
 use crate::matmul::components::MatrixLayout;
 use crate::matmul::components::SingleMatmulSpec;
+use crate::matmul::components::global::args::TensorInputsLaunch;
 use crate::matmul::kernels::matmul::Algorithm;
 use crate::matmul::tests::test_utils::Sample;
 use crate::matmul::tests::test_utils::TestPrecision;
 
 struct TensorRawParts<N: Numeric + CubeElement> {
-    handle: Handle,
+    handle: server::Handle,
     shape: Vec<usize>,
     strides: Vec<usize>,
     original_data: Option<Vec<N>>,
@@ -69,6 +68,7 @@ pub fn test_matmul_algorithm<A, P, R>(
 
     let cube_dim = A::cube_dim(&selection);
     let cube_count = A::cube_count(&selection, &problem);
+
     let config = match A::make_config(input, &problem, &cube_dim, &cube_count, P::QUANTIZED) {
         Ok(config) => config,
         Err(err) => {
@@ -118,6 +118,7 @@ pub fn test_matmul_algorithm<A, P, R>(
                 &out.shape,
                 problem.out_line_size,
             ),
+            ScalarArg::new(problem.k as u32),
             config,
         );
     }
@@ -128,6 +129,8 @@ pub fn test_matmul_algorithm<A, P, R>(
         &problem,
         &client,
         out.handle,
+        &out.shape,
+        &out.strides,
     );
 }
 
@@ -153,8 +156,10 @@ fn tensor_raw_parts<P: TestPrecision, R: Runtime>(
                 }
             };
 
+            let handle = client.create(P::EG::as_bytes(&data));
+
             TensorRawParts {
-                handle: client.create(P::EG::as_bytes(&data)),
+                handle,
                 shape: shape(problem, Ident::Lhs),
                 strides: strides(problem, Ident::Lhs),
                 original_data: Some(original_data),
@@ -176,8 +181,10 @@ fn tensor_raw_parts<P: TestPrecision, R: Runtime>(
                 }
             };
 
+            let handle = client.create(P::EG::as_bytes(&data));
+
             TensorRawParts {
-                handle: client.create(P::EG::as_bytes(&data)),
+                handle,
                 shape: shape(problem, Ident::Rhs),
                 strides: strides(problem, Ident::Rhs),
                 original_data: Some(original_data),
@@ -193,10 +200,13 @@ fn tensor_raw_parts<P: TestPrecision, R: Runtime>(
                 data.extend_from_slice(&[zero, zero, zero, params.zero_offset]);
             }
 
+            let shape = shape(problem, Ident::Out);
+            let (handle, strides) =
+                client.create_tensor(P::EG::as_bytes(&data), &shape, size_of::<P::EG>());
             TensorRawParts {
-                handle: client.create(P::EG::as_bytes(&data)),
-                shape: shape(problem, Ident::Out),
-                strides: strides(problem, Ident::Out),
+                handle,
+                shape,
+                strides,
                 original_data: None,
             }
         }

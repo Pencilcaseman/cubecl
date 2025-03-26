@@ -1,9 +1,9 @@
 use super::ComputeChannel;
-use crate::server::{Binding, ComputeServer, CubeCount, Handle};
-use crate::storage::BindingResource;
+use crate::server::{Binding, BindingWithMeta, ComputeServer, ConstBinding, CubeCount, Handle};
+use crate::storage::{BindingResource, ComputeStorage};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use cubecl_common::{benchmark::TimestampsResult, ExecutionMode};
+use cubecl_common::{ExecutionMode, benchmark::TimestampsResult};
 use spin::Mutex;
 
 /// The MutexComputeChannel ensures thread-safety by locking the server
@@ -46,7 +46,20 @@ where
         fut.await
     }
 
-    fn get_resource(&self, binding: Binding) -> BindingResource<Server> {
+    async fn read_tensor(&self, bindings: Vec<BindingWithMeta>) -> Vec<Vec<u8>> {
+        // Nb: The order here is really important - the mutex guard has to be dropped before
+        // the future is polled. Just calling lock().read().await can deadlock.
+        let fut = {
+            let mut server = self.server.lock();
+            server.read_tensor(bindings)
+        };
+        fut.await
+    }
+
+    fn get_resource(
+        &self,
+        binding: Binding,
+    ) -> BindingResource<<Server::Storage as ComputeStorage>::Resource> {
         self.server.lock().get_resource(binding)
     }
 
@@ -54,18 +67,36 @@ where
         self.server.lock().create(data)
     }
 
+    fn create_tensor(
+        &self,
+        data: &[u8],
+        shape: &[usize],
+        elem_size: usize,
+    ) -> (Handle, Vec<usize>) {
+        self.server.lock().create_tensor(data, shape, elem_size)
+    }
+
     fn empty(&self, size: usize) -> Handle {
         self.server.lock().empty(size)
+    }
+
+    fn empty_tensor(&self, shape: &[usize], elem_size: usize) -> (Handle, Vec<usize>) {
+        self.server.lock().empty_tensor(shape, elem_size)
     }
 
     unsafe fn execute(
         &self,
         kernel: Server::Kernel,
         count: CubeCount,
+        constants: Vec<ConstBinding>,
         handles: Vec<Binding>,
         kind: ExecutionMode,
     ) {
-        self.server.lock().execute(kernel, count, handles, kind)
+        unsafe {
+            self.server
+                .lock()
+                .execute(kernel, count, constants, handles, kind)
+        }
     }
 
     fn flush(&self) {
@@ -94,6 +125,10 @@ where
 
     fn memory_usage(&self) -> crate::memory_management::MemoryUsage {
         self.server.lock().memory_usage()
+    }
+
+    fn memory_cleanup(&self) {
+        self.server.lock().memory_cleanup();
     }
 
     fn enable_timestamps(&self) {

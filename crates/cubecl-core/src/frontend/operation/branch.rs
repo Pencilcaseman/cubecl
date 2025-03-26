@@ -15,11 +15,7 @@ use crate::{
 /// Since both branches are *evaluated* regardless of the condition, both branches must be *valid*
 /// regardless of the condition. Illegal memory accesses should not be done in either branch.
 pub fn select<C: CubePrimitive>(condition: bool, then: C, or_else: C) -> C {
-    if condition {
-        then
-    } else {
-        or_else
-    }
+    if condition { then } else { or_else }
 }
 
 /// Same as [select()] but with lines instead.
@@ -29,6 +25,23 @@ pub fn select_many<C: CubePrimitive>(
     then: Line<C>,
     or_else: Line<C>,
 ) -> Line<C> {
+    unexpanded!()
+}
+
+/// Returns the value at `index` in `slice` if `condition` is `true`, otherwise returns `fallback`.
+///
+/// This function is designed to be branchless while avoiding the read operation when `condition` is `false`.
+/// Actual behavior may depend on compiler optimizations.
+///
+/// # Safety
+///
+/// Unlike [`select`], no read is performed unless `condition` is `true`.
+pub fn conditional_read<C: CubePrimitive, I: Index>(
+    _condition: bool,
+    _slice: Slice<C>,
+    _index: I,
+    _fallback: C,
+) -> C {
     unexpanded!()
 }
 
@@ -77,5 +90,45 @@ pub mod select_many {
         or_else: ExpandElementTyped<Line<C>>,
     ) -> ExpandElementTyped<Line<C>> {
         select::expand(scope, condition.expand.into(), then, or_else)
+    }
+}
+
+pub mod conditional_read {
+    use std::num::NonZero;
+
+    use cubecl_ir::ConditionalRead;
+
+    use crate::ir::Instruction;
+
+    use super::*;
+
+    pub fn expand<C: CubePrimitive, I: Index>(
+        scope: &mut Scope,
+        condition: ExpandElementTyped<bool>,
+        slice: ExpandElementTyped<Slice<C>>,
+        index: ExpandElementTyped<u32>,
+        fallback: ExpandElementTyped<C>,
+    ) -> ExpandElementTyped<C> {
+        let cond = condition.expand.consume();
+        let slice = slice.expand.consume();
+        let index = index.expand.consume();
+        let fallback = fallback.expand.consume();
+
+        let vf = cond.vectorization_factor();
+        let vf = Ord::max(vf, slice.vectorization_factor());
+        let vf = Ord::max(vf, fallback.vectorization_factor());
+
+        let output = scope.create_local(slice.item.vectorize(NonZero::new(vf)));
+        let out = *output;
+
+        let conditional_read = Operator::ConditionalRead(ConditionalRead {
+            cond,
+            slice,
+            index,
+            fallback,
+        });
+        scope.register(Instruction::new(conditional_read, out));
+
+        output.into()
     }
 }

@@ -1,29 +1,27 @@
-use cubecl_core::{client::ComputeClient, prelude::TensorHandleRef, Runtime};
+use cubecl_core::{Runtime, client::ComputeClient, prelude::TensorHandleRef};
 use cubecl_std::MaybeQuantized;
 
 use crate::tensor::TensorHandle;
 
 use super::{
     components::{
-        global::loader::{
-            r#async::{
-                CyclicWindowLoading, MaximizeSliceLengthLoading, MaximizeUnitCountLoading,
-                WindowCooperativeLoading,
-            },
-            sync::StridedCoalescedLoading,
+        global::single_stage::{
+            CyclicWindowLoading, MaximizeSliceLengthLoading, MaximizeUnitCountLoading,
+            StridedCoalescedLoading, WindowCooperativeLoading,
         },
         stage::ColMajorTilingOrder,
         tile::accelerated::Accelerated,
     },
     kernels::{
+        MatmulLaunchError,
         matmul::{
-            self, double_buffering::DoubleBufferingAlgorithm, simple::SimpleAlgorithm,
+            self, double_buffering::DoubleBufferingAlgorithm,
+            double_buffering_barrier::DoubleBufferingBarrierAlgorithm, simple::SimpleAlgorithm,
             simple_barrier::SimpleBarrierAlgorithm, simple_pipelined::SimplePipelinedAlgorithm,
-            specialized::SpecializedAlgorithm,
+            simple_tma::SimpleTmaAlgorithm, specialized::SpecializedAlgorithm,
         },
         naive,
         tiling2d::{self, Tiling2dConfig},
-        MatmulLaunchError,
     },
 };
 
@@ -33,6 +31,7 @@ pub enum Strategy {
     SimpleBarrier(AsyncLoadingStrategy),
     SimplePipelined,
     DoubleBuffering,
+    DoubleBufferingBarrier,
     Specialized,
     #[cfg(any(test, feature = "export_tests"))]
     // Very slow, only use for testing.
@@ -55,8 +54,10 @@ pub enum AsyncLoadingStrategy {
     Cyclic,
     MaximizeSliceLength,
     MaximizeUnitCount,
+    Tma,
 }
 
+#[allow(clippy::result_large_err)]
 pub fn launch<R: Runtime, EG: MaybeQuantized>(
     strategy: &Strategy,
     client: &ComputeClient<R::Server, R::Channel>,
@@ -73,6 +74,7 @@ pub fn launch<R: Runtime, EG: MaybeQuantized>(
     )
 }
 
+#[allow(clippy::result_large_err)]
 pub fn launch_ref<R: Runtime, EG: MaybeQuantized>(
     strategy: &Strategy,
     client: &ComputeClient<R::Server, R::Channel>,
@@ -112,6 +114,11 @@ pub fn launch_ref<R: Runtime, EG: MaybeQuantized>(
                 EG,
                 SimpleBarrierAlgorithm<Accelerated, MaximizeUnitCountLoading>,
             >(client, lhs, rhs, out),
+            AsyncLoadingStrategy::Tma => {
+                matmul::matmul_cmma_tma_ref_no_check::<R, EG, SimpleTmaAlgorithm<Accelerated>>(
+                    client, lhs, rhs, out,
+                )
+            }
         },
         Strategy::SimplePipelined => {
             matmul::launch_ref::<R, EG, SimplePipelinedAlgorithm<Accelerated>>(
@@ -120,6 +127,11 @@ pub fn launch_ref<R: Runtime, EG: MaybeQuantized>(
         }
         Strategy::DoubleBuffering => {
             matmul::launch_ref::<R, EG, DoubleBufferingAlgorithm<Accelerated>>(
+                client, lhs, rhs, out,
+            )
+        }
+        Strategy::DoubleBufferingBarrier => {
+            matmul::launch_ref::<R, EG, DoubleBufferingBarrierAlgorithm<Accelerated>>(
                 client, lhs, rhs, out,
             )
         }

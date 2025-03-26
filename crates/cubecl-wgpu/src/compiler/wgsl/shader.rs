@@ -1,5 +1,5 @@
 use super::{Body, Extension, Item, Variable};
-use cubecl_core::{compute::Visibility, ir::Id, CubeDim};
+use cubecl_core::{CubeDim, compute::Visibility, ir::Id};
 use std::fmt::Display;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -22,15 +22,17 @@ pub struct SharedMemory {
     pub index: Id,
     item: Item,
     size: u32,
+    alignment: Option<u32>,
 }
 
 impl SharedMemory {
-    pub fn new(index: Id, item: Item, size: u32) -> Self {
+    pub fn new(index: Id, item: Item, size: u32, alignment: Option<u32>) -> Self {
         Self {
             location: Location::Workgroup,
             index,
             item,
             size,
+            alignment,
         }
     }
 }

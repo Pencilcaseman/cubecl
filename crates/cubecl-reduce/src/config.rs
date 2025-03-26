@@ -2,6 +2,7 @@ use cubecl_core::{
     channel::ComputeChannel, prelude::*, server::ComputeServer, tensor_line_size_parallel,
     tensor_line_size_perpendicular,
 };
+use cubecl_std::tensor::is_contiguous;
 
 use crate::ReduceStrategy;
 
@@ -15,13 +16,30 @@ pub enum LineMode {
     Perpendicular,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+/// How bound checks is handled for inner reductions.
+pub enum BoundChecksInner {
+    /// No bound check is necessary.
+    None,
+    /// Using a mask is enough for bound checks.
+    /// This will still read the memory in an out-of-bound location,
+    /// but will replace the value by the null value.
+    Mask,
+    /// Branching is necessary for bound checks.
+    ///
+    /// Probably the right setting when performing fuse on read.
+    Branch,
+}
+
 #[derive(Debug, Clone)]
 pub struct ReduceConfig {
     pub cube_count: CubeCount,
     pub cube_dim: CubeDim,
     pub line_mode: LineMode,
-    pub line_size: u32,
+    pub line_size_input: u32,
+    pub line_size_output: u32,
     pub bound_checks: bool,
+    pub bound_checks_inner: BoundChecksInner,
 }
 
 impl ReduceConfig {
@@ -46,8 +64,10 @@ impl ReduceConfig {
             cube_count: CubeCount::new_single(),
             cube_dim: CubeDim::new_single(),
             line_mode: LineMode::Parallel,
-            line_size: 1,
+            line_size_input: 1,
+            line_size_output: 1,
             bound_checks: true,
+            bound_checks_inner: BoundChecksInner::Mask,
         }
     }
 
@@ -69,7 +89,7 @@ impl ReduceConfig {
     ) -> Self {
         let elem = In::as_elem_native_unchecked();
         let supported_line_sizes = R::line_size_elem(&elem);
-        self.line_size = match self.line_mode {
+        self.line_size_input = match self.line_mode {
             LineMode::Parallel => {
                 tensor_line_size_parallel(supported_line_sizes, input.shape, input.strides, axis)
                     as u32
@@ -132,6 +152,18 @@ impl ReduceConfig {
                 ) as u32
             }
         };
+
+        if self.line_size_input > 1 && self.line_mode == LineMode::Perpendicular {
+            // TODO that this can be improved
+            let rank = output.strides.len();
+            let is_contiguous =
+                is_contiguous(&output.strides[axis..rank]) && output.strides[rank - 1] == 1;
+            let shape = output.shape.get(axis + 1).cloned().unwrap_or(1) as u32;
+
+            if is_contiguous && shape % self.line_size_input == 0 {
+                self.line_size_output = self.line_size_input;
+            }
+        }
         self
     }
 
@@ -162,7 +194,7 @@ impl ReduceConfig {
             };
         let reduce_count_per_cube = match self.line_mode {
             LineMode::Parallel => agent_count_per_cube,
-            LineMode::Perpendicular => agent_count_per_cube * self.line_size,
+            LineMode::Perpendicular => agent_count_per_cube * self.line_size_input,
         };
 
         let cube_count = reduce_count.div_ceil(reduce_count_per_cube);

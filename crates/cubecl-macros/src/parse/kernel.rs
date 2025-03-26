@@ -1,11 +1,11 @@
 use crate::{expression::Block, paths::prelude_type, scope::Context, statement::Pattern};
-use darling::{ast::NestedMeta, util::Flag, FromMeta};
+use darling::{FromMeta, ast::NestedMeta, util::Flag};
 use proc_macro2::{Span, TokenStream};
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use std::{collections::HashMap, iter};
 use syn::{
-    parse_quote, punctuated::Punctuated, spanned::Spanned, visit_mut::VisitMut, Expr, FnArg,
-    Generics, Ident, ItemFn, LitStr, ReturnType, Signature, TraitItemFn, Type, Visibility,
+    Expr, FnArg, Generics, Ident, ItemFn, LitStr, ReturnType, Signature, TraitItemFn, Type,
+    Visibility, parse_quote, punctuated::Punctuated, spanned::Spanned, visit_mut::VisitMut,
 };
 
 use super::{desugar::Desugar, helpers::is_comptime_attr, statement::parse_pat};
@@ -189,6 +189,7 @@ pub struct KernelFn {
     pub src_file: Option<LitStr>,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub enum KernelBody {
     Block(Block),

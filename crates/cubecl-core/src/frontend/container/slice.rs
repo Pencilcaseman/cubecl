@@ -1,21 +1,15 @@
-use std::marker::PhantomData;
-
-use cubecl_ir::{ExpandElement, Operator};
-
-use crate::{
-    frontend::{indexation::Index, Tensor},
-    ir::{self, Scope},
-    prelude::IntoRuntime,
-    unexpanded,
-};
+use super::Line;
 use crate::{
     frontend::{
         Array, CubePrimitive, CubeType, ExpandElementTyped, Init, SharedMemory, SizedContainer,
+        Tensor, indexation::Index,
     },
-    ir::Instruction,
+    ir::{Instruction, Scope},
+    prelude::{List, ListExpand, ListMut, ListMutExpand, index, index_assign},
+    unexpanded,
 };
-
-use super::Line;
+use cubecl_ir::{ExpandElement, Operator};
+use std::marker::PhantomData;
 
 /// A read-only contiguous list of elements
 ///
@@ -81,6 +75,18 @@ mod metadata {
         {
             unexpanded!()
         }
+
+        /// Try to cast the slice to the given type and panic if the type isn't the same.
+        ///
+        /// This function should only be used to satisfy the Rust type system, when two generic
+        /// types are supposed to be the same.
+        pub fn try_cast_unchecked<T>(&self) -> SliceMut<T>
+        where
+            E: CubePrimitive,
+            T: CubePrimitive,
+        {
+            unexpanded!()
+        }
     }
 
     impl<C: CubeType> ExpandElementTyped<Slice<C>> {
@@ -142,18 +148,30 @@ mod metadata {
         {
             self.expand.into()
         }
+
+        /// Expand method of [try_cast_unchecked](Slice::try_cast_unchecked).
+        pub fn __expand_try_cast_unchecked_method<T>(
+            self,
+            scope: &mut Scope,
+        ) -> ExpandElementTyped<SliceMut<T>>
+        where
+            C: CubePrimitive,
+            T: CubePrimitive,
+        {
+            if T::as_elem(scope) != C::as_elem(scope) {
+                panic!("Try cast unchecked should only be used to satisfy the rust type system.")
+            }
+
+            self.expand.into()
+        }
     }
 }
 
 /// Module that contains the implementation details of the index functions.
 mod indexation {
-    use cubecl_ir::Operator;
-    use ir::Instruction;
+    use cubecl_ir::{BinaryOperator, Instruction, Operator};
 
-    use crate::{
-        ir::BinaryOperator,
-        prelude::{CubeIndex, CubeIndexMut},
-    };
+    use crate::prelude::{CubeIndex, CubeIndexMut};
 
     use super::*;
 
@@ -439,7 +457,7 @@ pub fn slice_expand<I: Into<ExpandElement>, S1: Index, S2: Index>(
     let out = scope.create_slice(input.item);
 
     scope.register(Instruction::new(
-        Operator::Slice(ir::SliceOperator {
+        Operator::Slice(cubecl_ir::SliceOperator {
             input: *input,
             start: start.value(),
             end: end.value(),
@@ -450,14 +468,64 @@ pub fn slice_expand<I: Into<ExpandElement>, S1: Index, S2: Index>(
     out
 }
 
-impl<E: CubePrimitive> IntoRuntime for Slice<E> {
-    fn __expand_runtime_method(self, _scope: &mut Scope) -> Self::ExpandType {
-        unimplemented!("Array can't exist at compile time")
+impl<T: CubePrimitive> List<T> for Slice<T> {
+    fn __expand_read(
+        scope: &mut Scope,
+        this: ExpandElementTyped<Slice<T>>,
+        idx: ExpandElementTyped<u32>,
+    ) -> ExpandElementTyped<T> {
+        index::expand(scope, this, idx)
     }
 }
 
-impl<E: CubePrimitive> IntoRuntime for SliceMut<E> {
-    fn __expand_runtime_method(self, _scope: &mut Scope) -> Self::ExpandType {
-        unimplemented!("Array can't exist at compile time")
+impl<T: CubePrimitive> ListExpand<T> for ExpandElementTyped<Slice<T>> {
+    fn __expand_read_method(
+        self,
+        scope: &mut Scope,
+        idx: ExpandElementTyped<u32>,
+    ) -> ExpandElementTyped<T> {
+        index::expand(scope, self, idx)
+    }
+}
+
+impl<T: CubePrimitive> List<T> for SliceMut<T> {
+    fn __expand_read(
+        scope: &mut Scope,
+        this: ExpandElementTyped<SliceMut<T>>,
+        idx: ExpandElementTyped<u32>,
+    ) -> ExpandElementTyped<T> {
+        index::expand(scope, this, idx)
+    }
+}
+
+impl<T: CubePrimitive> ListExpand<T> for ExpandElementTyped<SliceMut<T>> {
+    fn __expand_read_method(
+        self,
+        scope: &mut Scope,
+        idx: ExpandElementTyped<u32>,
+    ) -> ExpandElementTyped<T> {
+        index::expand(scope, self, idx)
+    }
+}
+
+impl<T: CubePrimitive> ListMut<T> for SliceMut<T> {
+    fn __expand_write(
+        scope: &mut Scope,
+        this: ExpandElementTyped<SliceMut<T>>,
+        idx: ExpandElementTyped<u32>,
+        value: ExpandElementTyped<T>,
+    ) {
+        index_assign::expand(scope, this, idx, value);
+    }
+}
+
+impl<T: CubePrimitive> ListMutExpand<T> for ExpandElementTyped<SliceMut<T>> {
+    fn __expand_write_method(
+        self,
+        scope: &mut Scope,
+        idx: ExpandElementTyped<u32>,
+        value: ExpandElementTyped<T>,
+    ) {
+        index_assign::expand(scope, self, idx, value);
     }
 }

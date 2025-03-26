@@ -4,8 +4,8 @@ use cubecl_ir::{
 };
 
 use crate::{
-    analyses::const_len::{Slice, Slices},
     AtomicCounter, Optimizer,
+    analyses::const_len::{Slice, Slices},
 };
 
 use super::OptimizerPass;
@@ -494,6 +494,7 @@ fn try_const_eval_operator(op: &mut Operator) -> Option<ConstantScalarValue> {
         | Operator::InitLine(_)
         | Operator::UncheckedIndexAssign(_)
         | Operator::Bitcast(_)
-        | Operator::Select(_) => None,
+        | Operator::Select(_)
+        | Operator::ConditionalRead(_) => None,
     }
 }

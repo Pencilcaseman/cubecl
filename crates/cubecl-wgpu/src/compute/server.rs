@@ -1,25 +1,23 @@
 use std::{future::Future, time::Duration};
 
-use super::{
-    stream::{PipelineDispatch, WgpuStream},
-    WgpuStorage,
-};
-use crate::{timestamps::KernelTimestamps, AutoGraphicsApi};
-use crate::{AutoCompiler, GraphicsApi};
+use super::WgpuResource;
+use super::{WgpuStorage, stream::WgpuStream};
+use crate::AutoCompiler;
+use crate::timestamps::KernelTimestamps;
 use alloc::sync::Arc;
 use cubecl_common::future;
 use cubecl_core::{
+    Feature, KernelId, MemoryConfiguration, WgpuCompilationOptions,
     compute::DebugInformation,
     prelude::*,
-    server::{Binding, Handle},
-    Feature, KernelId, MemoryConfiguration, WgpuCompilationOptions,
+    server::{Binding, BindingWithMeta, ConstBinding, Handle},
 };
 use cubecl_runtime::{
+    TimestampsError, TimestampsResult,
     debug::{DebugLogger, ProfileLevel},
     memory_management::MemoryDeviceProperties,
     server::{self, ComputeServer},
     storage::BindingResource,
-    TimestampsError, TimestampsResult,
 };
 use hashbrown::HashMap;
 use wgpu::ComputePipeline;
@@ -45,6 +43,7 @@ impl WgpuServer {
         device: wgpu::Device,
         queue: wgpu::Queue,
         tasks_max: usize,
+        backend: wgpu::Backend,
     ) -> Self {
         let logger = DebugLogger::default();
         let mut timestamps = KernelTimestamps::Disabled;
@@ -69,7 +68,7 @@ impl WgpuServer {
             logger,
             duration_profiled: None,
             stream,
-            backend: AutoGraphicsApi::backend(),
+            backend,
         }
     }
 
@@ -105,31 +104,17 @@ impl ComputeServer for WgpuServer {
     type Kernel = Box<dyn CubeTask<AutoCompiler>>;
     type Storage = WgpuStorage;
     type Feature = Feature;
+    type Info = wgpu::Backend;
 
     fn read(
         &mut self,
         bindings: Vec<Binding>,
     ) -> impl Future<Output = Vec<Vec<u8>>> + Send + 'static {
-        let resources = bindings
-            .into_iter()
-            .map(|binding| {
-                let rb = self.get_resource(binding);
-                let resource = rb.resource();
-
-                (resource.buffer.clone(), resource.offset(), resource.size())
-            })
-            .collect();
-
-        // Clear compute pass.
-        self.stream.read_buffers(resources)
+        self.stream.read_buffers(bindings)
     }
 
-    fn get_resource(&mut self, binding: Binding) -> BindingResource<Self> {
-        let resource = self.stream.get_resource(
-            binding.clone().memory,
-            binding.offset_start,
-            binding.offset_end,
-        );
+    fn get_resource(&mut self, binding: Binding) -> BindingResource<WgpuResource> {
+        let resource = self.stream.mem_manage.get_resource(binding.clone());
         BindingResource::new(binding, resource)
     }
 
@@ -139,17 +124,18 @@ impl ComputeServer for WgpuServer {
     /// This is important, otherwise the compute passes are going to be too small and we won't be able to
     /// fully utilize the GPU.
     fn create(&mut self, data: &[u8]) -> server::Handle {
-        Handle::new(self.stream.create(data), None, None, data.len() as u64)
+        self.stream.create(data)
     }
 
     fn empty(&mut self, size: usize) -> server::Handle {
-        Handle::new(self.stream.empty(size as u64), None, None, size as u64)
+        self.stream.empty(size as u64)
     }
 
     unsafe fn execute(
         &mut self,
         kernel: Self::Kernel,
         count: CubeCount,
+        constants: Vec<ConstBinding>,
         bindings: Vec<Binding>,
         mode: ExecutionMode,
     ) {
@@ -174,24 +160,7 @@ impl ComputeServer for WgpuServer {
 
         // Start execution.
         let pipeline = self.pipeline(kernel, mode);
-
-        // Store all the resources we'll be using. This could be eliminated if
-        // there was a way to tie the lifetime of the resource to the memory handle.
-        let resources: Vec<_> = bindings
-            .iter()
-            .map(|binding| self.get_resource(binding.clone()).into_resource())
-            .collect();
-
-        // First resolve the dispatch buffer if needed. The weird ordering is because the lifetime of this
-        // needs to be longer than the compute pass, so we can't do this just before dispatching.
-        let dispatch = match count.clone() {
-            CubeCount::Dynamic(binding) => {
-                PipelineDispatch::Dynamic(self.get_resource(binding).into_resource())
-            }
-            CubeCount::Static(x, y, z) => PipelineDispatch::Static(x, y, z),
-        };
-
-        self.stream.register(pipeline, resources, dispatch);
+        self.stream.register(pipeline, constants, bindings, &count);
 
         // If profiling, write out results.
         if let Some(level) = profile_level {
@@ -261,7 +230,11 @@ impl ComputeServer for WgpuServer {
     }
 
     fn memory_usage(&self) -> cubecl_runtime::memory_management::MemoryUsage {
-        self.stream.memory_usage()
+        self.stream.mem_manage.memory_usage()
+    }
+
+    fn memory_cleanup(&mut self) {
+        self.stream.mem_manage.memory_cleanup(true);
     }
 
     fn enable_timestamps(&mut self) {
@@ -274,6 +247,32 @@ impl ComputeServer for WgpuServer {
             self.stream.timestamps.disable();
         }
     }
+
+    fn read_tensor(
+        &mut self,
+        bindings: Vec<BindingWithMeta>,
+    ) -> impl Future<Output = Vec<Vec<u8>>> + Send + 'static {
+        let bindings = bindings.into_iter().map(|it| it.binding).collect();
+        self.read(bindings)
+    }
+
+    fn create_tensor(
+        &mut self,
+        data: &[u8],
+        shape: &[usize],
+        _elem_size: usize,
+    ) -> (Handle, Vec<usize>) {
+        let strides = contiguous_strides(shape);
+        let handle = self.create(data);
+        (handle, strides)
+    }
+
+    fn empty_tensor(&mut self, shape: &[usize], elem_size: usize) -> (Handle, Vec<usize>) {
+        let strides = contiguous_strides(shape);
+        let size = shape.iter().product::<usize>() * elem_size;
+        let handle = self.empty(size);
+        (handle, strides)
+    }
 }
 
 fn compiler(backend: wgpu::Backend) -> AutoCompiler {
@@ -282,4 +281,13 @@ fn compiler(backend: wgpu::Backend) -> AutoCompiler {
         wgpu::Backend::Vulkan => AutoCompiler::SpirV(Default::default()),
         _ => AutoCompiler::Wgsl(Default::default()),
     }
+}
+
+fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
+    let rank = shape.len();
+    let mut strides = vec![1; rank];
+    for i in (0..rank - 1).rev() {
+        strides[i] = strides[i + 1] * shape[i + 1];
+    }
+    strides
 }

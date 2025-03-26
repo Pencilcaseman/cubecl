@@ -2,12 +2,13 @@ use crate::compute::KernelTask;
 use crate::frontend::TensorHandleRef;
 use crate::ir::Elem;
 use crate::pod::CubeElement;
-use crate::{calculate_cube_count_elemwise, Kernel, Runtime};
+use crate::{Kernel, Runtime, calculate_cube_count_elemwise};
 use cubecl_common::CubeDim;
 use cubecl_runtime::client::ComputeClient;
 use cubecl_runtime::server::{Binding, CubeCount, Handle};
 
 /// The position of the input or output to calculate the number of cubes to launch.
+#[allow(clippy::large_enum_variant)]
 pub enum CubeCountSettings {
     Input { pos: usize },
     Output { pos: usize },
@@ -216,7 +217,7 @@ fn execute_dynamic<R, K, E1, E2, E3>(
     }
 
     let kernel = Box::new(KernelTask::<R::Compiler, K>::new(kernel));
-    client.execute(kernel, settings.cube_count, handles);
+    client.execute(kernel, settings.cube_count, Vec::new(), handles);
 }
 
 struct ExecuteSettings {

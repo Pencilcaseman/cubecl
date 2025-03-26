@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use super::Compiler;
 use crate::{
-    compute::{Binding, KernelDefinition, Location, Visibility},
+    compute::{Binding, ConstBinding, KernelDefinition, Location, Visibility},
     prelude::FastMath,
 };
 
@@ -17,6 +17,7 @@ use crate::{
 #[derive(Clone)]
 pub struct KernelIntegrator {
     expansion: KernelExpansion,
+    const_bindings: Vec<ConstBinding>,
     input_bindings: Vec<Binding>,
     output_bindings: Vec<Binding>,
     named_bindings: Vec<(String, Binding)>,
@@ -25,6 +26,7 @@ pub struct KernelIntegrator {
 /// The information necessary to compile a [kernel definition](KernelDefinition).
 #[derive(Clone)]
 pub struct KernelExpansion {
+    pub constants: Vec<ConstantInfo>,
     pub inputs: Vec<InputInfo>,
     pub outputs: Vec<OutputInfo>,
     pub scope: Scope,
@@ -224,20 +226,6 @@ impl KernelSettings {
     }
 }
 
-#[allow(dead_code)]
-fn is_contiguous(strides: &[usize]) -> bool {
-    let mut current = 0;
-
-    for stride in strides.iter().rev() {
-        if current > *stride {
-            return false;
-        }
-        current = *stride;
-    }
-
-    true
-}
-
 /// Information related to an input.
 #[derive(Clone, Debug)]
 pub enum InputInfo {
@@ -251,6 +239,12 @@ pub enum InputInfo {
         elem: Elem,
         size: usize,
     },
+}
+
+/// Information related to a constant input.
+#[derive(Clone, Debug)]
+pub enum ConstantInfo {
+    TensorMap,
 }
 
 impl InputInfo {
@@ -323,6 +317,7 @@ impl KernelIntegrator {
     pub fn new(info: KernelExpansion) -> Self {
         Self {
             expansion: info,
+            const_bindings: Default::default(),
             input_bindings: Default::default(),
             output_bindings: Default::default(),
             named_bindings: Default::default(),
@@ -331,9 +326,11 @@ impl KernelIntegrator {
 
     /// Performs the compilation with the provided [settings](KernelSettings).
     pub fn integrate(mut self, mut settings: KernelSettings) -> KernelDefinition {
+        self.register_constants();
         self.register_inputs(&settings);
         self.register_outputs(&mut settings);
 
+        let constants = self.const_bindings;
         let inputs = self.input_bindings;
         let outputs = self.output_bindings;
         let mut named = Vec::with_capacity(2);
@@ -355,12 +352,23 @@ impl KernelIntegrator {
         }
 
         KernelDefinition {
+            consts: constants,
             inputs,
             outputs,
             named,
             cube_dim: settings.cube_dim,
             body: self.expansion.scope,
             options: settings.options,
+        }
+    }
+
+    fn register_constants(&mut self) {
+        for constant in self.expansion.constants.drain(..) {
+            match constant {
+                ConstantInfo::TensorMap => {
+                    self.const_bindings.push(ConstBinding::TensorMap);
+                }
+            }
         }
     }
 
@@ -485,7 +493,12 @@ impl KernelIntegrator {
         };
 
         let (item, local, position) = match output {
-            OutputInfo::ArrayWrite { item, local, position, .. } => (item, local, position),
+            OutputInfo::ArrayWrite {
+                item,
+                local,
+                position,
+                ..
+            } => (item, local, position),
             OutputInfo::InputArrayWrite {
                 item: _,
                 input,
@@ -498,7 +511,9 @@ impl KernelIntegrator {
                 );
                 return;
             }
-            OutputInfo::Array { .. } => panic!("Can't register an inplace operation for an array that isn't using a defined writing strategy."),
+            OutputInfo::Array { .. } => panic!(
+                "Can't register an inplace operation for an array that isn't using a defined writing strategy."
+            ),
         };
 
         let item = match self.input_bindings.get_mut(mapping.pos_input) {

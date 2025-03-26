@@ -24,12 +24,8 @@ pub trait Runtime: Send + Sync + 'static + core::fmt::Debug {
     /// Retrieve the compute client from the runtime device.
     fn client(device: &Self::Device) -> ComputeClient<Self::Server, Self::Channel>;
 
-    /// The runtime name.
-    fn name() -> &'static str;
-
-    /// The default extension for the runtime's kernel/shader code.
-    /// Might change based on which compiler is used.
-    fn extension() -> &'static str;
+    /// The runtime name on the given device.
+    fn name(client: &ComputeClient<Self::Server, Self::Channel>) -> &'static str;
 
     /// Return true if global input array lengths should be added to kernel info.
     fn require_array_lengths() -> bool {
@@ -74,12 +70,24 @@ pub enum Feature {
     Pipeline,
     /// The barrier feature enables barrier (async) operations
     Barrier,
+    /// Tensor Memory Accelerator features. Minimum H100/RTX 5000 series for base set
+    Tma(TmaFeature),
 }
 
-// Atomic features that may be supported by a [cube runtime](Runtime).
+/// Atomic features that may be supported by a [cube runtime](Runtime).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AtomicFeature {
     LoadStore,
     Add,
     MinMax,
+}
+
+/// Atomic features that may be supported by a [cube runtime](Runtime).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TmaFeature {
+    /// Base feature set for tensor memory accelerator features. Includes tiling and im2col
+    Base,
+    /// im2colWide encoding for tensor map.
+    /// TODO: Not yet implemented due to missing `cudarc` support
+    Im2colWide,
 }

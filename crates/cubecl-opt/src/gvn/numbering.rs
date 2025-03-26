@@ -10,7 +10,7 @@ use cubecl_ir::{
 
 use crate::PhiInstruction;
 
-use super::{convert::value_of_var, Expression, Instruction, Value, ValueTable};
+use super::{Expression, Instruction, Value, ValueTable, convert::value_of_var};
 
 impl ValueTable {
     /// Look up or insert operation if it's numberable. Returns the number, optional out value and
@@ -127,7 +127,8 @@ impl ValueTable {
             | Operation::CoopMma(_)
             | Operation::NonSemantic(_)
             | Operation::Barrier(_)
-            | Operation::Pipeline(_) => Err(None),
+            | Operation::Pipeline(_)
+            | Operation::Tma(_) => Err(None),
         }
     }
 

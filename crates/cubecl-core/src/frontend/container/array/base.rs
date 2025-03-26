@@ -2,16 +2,16 @@ use std::{marker::PhantomData, num::NonZero};
 
 use cubecl_ir::{ExpandElement, Scope};
 
-use crate::frontend::{CubePrimitive, ExpandElementBaseInit, ExpandElementTyped, IntoRuntime};
-use crate::prelude::SizedContainer;
-use crate::{
-    frontend::indexation::Index,
-    prelude::{assign, index, index_assign},
-};
+use crate::frontend::{CubePrimitive, ExpandElementBaseInit, ExpandElementTyped};
+use crate::prelude::{List, ListExpand, ListMut, ListMutExpand, SizedContainer};
 use crate::{
     frontend::CubeType,
     ir::{Item, Metadata},
     unexpanded,
+};
+use crate::{
+    frontend::indexation::Index,
+    prelude::{assign, index, index_assign},
 };
 
 /// A contiguous array of elements.
@@ -322,12 +322,6 @@ mod indexation {
     }
 }
 
-impl<E: CubePrimitive> IntoRuntime for Array<E> {
-    fn __expand_runtime_method(self, _scope: &mut Scope) -> Self::ExpandType {
-        unimplemented!("Array can't exist at compile time")
-    }
-}
-
 impl<C: CubeType> CubeType for Array<C> {
     type ExpandType = ExpandElementTyped<Array<C>>;
 }
@@ -352,5 +346,47 @@ impl<T: CubeType> Iterator for &Array<T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         unexpanded!()
+    }
+}
+
+impl<T: CubePrimitive> List<T> for Array<T> {
+    fn __expand_read(
+        scope: &mut Scope,
+        this: ExpandElementTyped<Array<T>>,
+        idx: ExpandElementTyped<u32>,
+    ) -> ExpandElementTyped<T> {
+        index::expand(scope, this, idx)
+    }
+}
+
+impl<T: CubePrimitive> ListExpand<T> for ExpandElementTyped<Array<T>> {
+    fn __expand_read_method(
+        self,
+        scope: &mut Scope,
+        idx: ExpandElementTyped<u32>,
+    ) -> ExpandElementTyped<T> {
+        index::expand(scope, self, idx)
+    }
+}
+
+impl<T: CubePrimitive> ListMut<T> for Array<T> {
+    fn __expand_write(
+        scope: &mut Scope,
+        this: ExpandElementTyped<Array<T>>,
+        idx: ExpandElementTyped<u32>,
+        value: ExpandElementTyped<T>,
+    ) {
+        index_assign::expand(scope, this, idx, value);
+    }
+}
+
+impl<T: CubePrimitive> ListMutExpand<T> for ExpandElementTyped<Array<T>> {
+    fn __expand_write_method(
+        self,
+        scope: &mut Scope,
+        idx: ExpandElementTyped<u32>,
+        value: ExpandElementTyped<T>,
+    ) {
+        index_assign::expand(scope, self, idx, value);
     }
 }

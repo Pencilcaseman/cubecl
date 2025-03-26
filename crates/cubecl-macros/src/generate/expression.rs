@@ -1,6 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned};
-use syn::{spanned::Spanned, Ident, Member, Pat, Path, PathArguments};
+use syn::{Ident, Member, Pat, Path, PathArguments, spanned::Spanned};
 
 use crate::{
     expression::{Block, Expression, MatchArm},
@@ -457,7 +457,7 @@ impl Expression {
                         return error!(
                             args.span(),
                             "Fn generics not supported when constructing runtime structs"
-                        )
+                        );
                     }
                 };
 
@@ -481,14 +481,14 @@ impl Expression {
             Expression::Block(block) => block.to_tokens(context),
             Expression::Match {
                 runtime_variants,
-                expr: const_expr,
+                expr,
                 arms,
             } => {
                 let arms = arms
                     .iter()
                     .map(|arm| arm.to_tokens(context, *runtime_variants));
                 quote! {
-                    match #const_expr {
+                    match #expr {
                         #(#arms,)*
                     }
                 }
@@ -547,31 +547,35 @@ impl MatchArm {
             // Useful for recursive call.
             Pat::Ident(_) => {}
             // Match path::Enum::Ident
-            Pat::Path(ref mut pat) => {
+            Pat::Path(pat) => {
                 let mut path = pat.path.clone();
                 append_expand_to_enum_name(&mut path);
                 pat.path = path;
             }
             // Match path::Enum::Variant {a, b, c}
-            Pat::Struct(ref mut pat) => {
+            Pat::Struct(pat) => {
                 let mut path = pat.path.clone();
                 append_expand_to_enum_name(&mut path);
                 pat.path = path;
             }
             // Match path::Enum::Variant(a, b, c)
-            Pat::TupleStruct(ref mut pat) => {
+            Pat::TupleStruct(pat) => {
                 let mut path = pat.path.clone();
                 append_expand_to_enum_name(&mut path);
                 pat.path = path;
             }
             // Match Pat1 | Pat2 | ...
-            Pat::Or(ref mut pat) => {
+            Pat::Or(pat) => {
                 pat.cases.iter_mut().for_each(Self::expand_pat);
+            }
+            // Match (Pat1, Pat2, ...)
+            Pat::Tuple(pat) => {
+                pat.elems.iter_mut().for_each(Self::expand_pat);
             }
             // Match the underscore pattern _
             Pat::Wild(_) => {}
             _ => {
-                panic!("unsupported pattern in match");
+                panic!("unsupported pattern in match for {pat:?}");
                 // NOTE: From the documentation https://docs.rs/syn/latest/syn/enum.Pat.html
                 //       I don't think we should support any other patterns.
                 //       Users can always use a big if, else if, else pattern instead.
@@ -587,7 +591,7 @@ fn append_expand_to_enum_name(path: &mut Path) {
         let segment = path.segments.get_mut(path.segments.len() - 2).unwrap(); // Safe because of the if
         segment.ident = Ident::new(&format!("{}Expand", segment.ident), Span::call_site());
     } else {
-        panic!("unsupported pattern in match");
+        panic!("unsupported pattern in match because of segment len");
     }
 }
 

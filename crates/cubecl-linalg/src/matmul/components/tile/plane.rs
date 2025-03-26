@@ -1,6 +1,6 @@
 use crate::matmul::components::config::MatmulConfig;
 use crate::matmul::components::{
-    tile, Ident, InvalidConfigError, MatmulConfigFactory, MatmulPrecision, MatrixLayout,
+    Ident, InvalidConfigError, MatmulConfigFactory, MatmulPrecision, MatrixLayout, tile,
 };
 use crate::matmul::components::{MatmulProblem, MatmulSize};
 use crate::matmul::kernels::MatmulAvailabilityError;
@@ -19,6 +19,7 @@ use super::Tile;
 ///  - When loading perpendicular to the lines, too much data is loaded from in comparison to what is used.
 ///    A solution could be to always load the stage with lhs in row-major and rhs in col-major, using only parallel fill
 ///  - If not vec4, there are patches in read_output that may harm performance
+#[derive(CubeType, Clone)]
 pub struct PlaneMma;
 
 impl TileMatmulFamily for PlaneMma {
@@ -354,11 +355,15 @@ impl MatmulConfigFactory for PlaneMma {
 
     fn check_config(config: &Self::Config) -> Result<(), InvalidConfigError> {
         if config.size.m * config.size.n % config.plane_dim != 0 {
-            return Err(Box::new("Todo"));
+            return Err(Box::new(
+                "Lhs number of elements should be divisible by plane dimension.",
+            ));
         }
 
         if config.size.k * config.size.n % config.plane_dim != 0 {
-            return Err(Box::new("Todo"));
+            return Err(Box::new(
+                "Rhs number of elements should be divisible by plane dimension.",
+            ));
         }
 
         Ok(())
@@ -393,9 +398,7 @@ impl MatmulConfigFactory for PlaneMma {
             return Err(MatmulAvailabilityError::PlaneOperationsUnavailable);
         }
 
-        if !(client.properties().feature_enabled(Feature::Type(i_elem))
-            && client.properties().feature_enabled(Feature::Type(o_elem)))
-        {
+        if !MP::EG::is_supported(client) {
             return Err(MatmulAvailabilityError::TypesUnavailable {
                 input: i_elem,
                 output: o_elem,
