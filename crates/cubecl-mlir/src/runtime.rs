@@ -1,16 +1,19 @@
 use cubecl_core::{
+    AtomicFeature, CubeDim, DeviceId, Feature, MemoryConfiguration, Runtime,
     channel::{ComputeChannel, MutexComputeChannel},
     ir::{Elem, FloatKind},
     prelude::ComputeClient,
-    AtomicFeature, DeviceId, Feature, MemoryConfiguration, Runtime,
 };
 use cubecl_runtime::{
+    ComputeRuntime, DeviceProperties,
     memory_management::{HardwareProperties, MemoryDeviceProperties},
     storage::ComputeStorage,
-    ComputeRuntime, DeviceProperties,
 };
 
-use crate::{compiler::MlirCompiler, storage::MlirStorage};
+use crate::{
+    compiler::{MlirCompilationOptions, MlirCompiler},
+    storage::MlirStorage,
+};
 
 #[derive(Debug)]
 pub struct MlirRuntime;
@@ -43,7 +46,7 @@ impl Runtime for MlirRuntime {
 
     type Device = MlirDevice;
 
-    fn device_id(device: &Self::Device) -> DeviceId {
+    fn device_id(_device: &Self::Device) -> DeviceId {
         todo!()
     }
 
@@ -56,11 +59,15 @@ impl Runtime for MlirRuntime {
                 alignment: MlirStorage::ALIGNMENT,
             };
 
+            // TODO: These are all random numbers
             let hardware_props = HardwareProperties {
                 plane_size_min: 0,
                 plane_size_max: 0,
                 max_bindings: 1024,
                 max_shared_memory_size: 4096,
+                max_cube_count: CubeDim::new(1024, 1024, 1024),
+                max_units_per_cube: 1024,
+                max_cube_dim: CubeDim::new(1024, 1024, 1024),
             };
 
             let device_props =
@@ -69,19 +76,17 @@ impl Runtime for MlirRuntime {
             let server = MlirServer::new(
                 mem_props,
                 MemoryConfiguration::default(),
-                Default::default(),
+                MlirCompilationOptions::default(),
             );
             let channel = MutexComputeChannel::new(server);
 
-            ComputeClient::new(channel, device_props)
+            ComputeClient::new(channel, device_props, ())
         })
     }
 
-    fn name() -> &'static str {
-        todo!()
-    }
-
-    fn extension() -> &'static str {
+    fn name(
+        _client: &ComputeClient<Self::Server, Self::Channel>,
+    ) -> &'static str {
         todo!()
     }
 
@@ -101,6 +106,6 @@ impl Runtime for MlirRuntime {
         Self::supported_line_sizes()
             .iter()
             .filter(|v| **v as usize * elem.size() <= 16)
-            .cloned() // 128 bits
+            .copied() // 128 bits
     }
 }

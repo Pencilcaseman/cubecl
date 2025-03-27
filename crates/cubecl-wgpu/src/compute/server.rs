@@ -9,6 +9,7 @@ use cubecl_common::future;
 use cubecl_core::{
     Feature, KernelId, MemoryConfiguration, WgpuCompilationOptions,
     compute::DebugInformation,
+    contiguous_strides,
     prelude::*,
     server::{Binding, BindingWithMeta, ConstBinding, Handle},
 };
@@ -281,13 +282,4 @@ fn compiler(backend: wgpu::Backend) -> AutoCompiler {
         wgpu::Backend::Vulkan => AutoCompiler::SpirV(Default::default()),
         _ => AutoCompiler::Wgsl(Default::default()),
     }
-}
-
-fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
-    let rank = shape.len();
-    let mut strides = vec![1; rank];
-    for i in (0..rank - 1).rev() {
-        strides[i] = strides[i + 1] * shape[i + 1];
-    }
-    strides
 }

@@ -158,6 +158,19 @@ pub fn tensor_line_size_perpendicular(
         .unwrap_or(1)
 }
 
+/// Generate a set of contiguous strides matching the provided input shape. The
+/// strides are computed for row-major ordered matrices (a.k.a C-style matrices).
+///
+/// For example, if the input shape is `[2, 3]`, the strides are `[3, 1]`.
+pub fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
+    let rank = shape.len();
+    let mut strides = vec![1; rank];
+    for i in (0..rank - 1).rev() {
+        strides[i] = strides[i + 1] * shape[i + 1];
+    }
+    strides
+}
+
 /// Runtime arguments to launch a kernel.
 pub type RuntimeArg<'a, T, R> = <T as LaunchArg>::RuntimeArg<'a, R>;
 

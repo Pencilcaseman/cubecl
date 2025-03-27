@@ -37,6 +37,7 @@ derive_more = { workspace = true, features = [
 ] }
 
 log = { workspace = true }
+melior = { version = "0.22.0", features = ["ods-dialects", "helpers"] }
 
 [dev-dependencies]
 cubecl-core = { path = "../cubecl-core", version = "0.5.0", features = [

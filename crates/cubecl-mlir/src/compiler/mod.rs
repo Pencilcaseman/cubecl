@@ -1,11 +1,12 @@
 use cubecl_common::ExecutionMode;
 use cubecl_core::{
+    Compiler, WgpuCompilationOptions,
     prelude::{CompiledKernel, KernelDefinition},
     server::ComputeServer,
-    Compiler, WgpuCompilationOptions,
 };
 use derive_new::new;
 
+mod mlir;
 pub mod module;
 
 use module::MlirRepresentation;
@@ -33,10 +34,16 @@ impl Compiler for MlirCompiler {
 
         println!("Kernel structure: {:?}", kernel.body);
 
+        mlir::compile_kernel(&kernel);
+
         todo!()
     }
 
     fn elem_size(&self, elem: cubecl_core::ir::Elem) -> usize {
+        todo!()
+    }
+
+    fn extension(&self) -> &'static str {
         todo!()
     }
 }

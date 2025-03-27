@@ -1,5 +1,5 @@
 use std::{
-    alloc::{alloc, dealloc, Layout},
+    alloc::{Layout, alloc, dealloc},
     collections::HashMap,
     ffi,
     ptr::NonNull,
@@ -102,10 +102,8 @@ impl ComputeStorage for MlirStorage {
 
     fn alloc(&mut self, size: u64) -> StorageHandle {
         let id = StorageId::new();
-        let layout =
-
-        Layout::from_size_align(size as usize,
-            Self::ALIGNMENT as usize)
+        let layout = Layout::from_size_align(usize::try_from(size).expect("Size must be a positive integer"),
+             usize::try_from(Self::ALIGNMENT).expect("Invalid memory alignment"))
             .expect("Failed to construct Layout. Ensure size is non-zero and does not overflow ISIZE");
 
         unsafe {
